@@ -19,86 +19,87 @@
 <body>
   <h1>Testing Request Form</h1>
 
-  <fieldset>
-    <legend>Customer Information</legend>
-    <form id="sampleForm">
-      <div class="form-row">
-        <label for="customer_name">Company:</label>
-        <input name="customer_name" placeholder="Company" required><br>
-      </div>
-      <div class="form-row">
-        <label for="street-address">Street Address:</label>
-        <input name="street-address" required><br>
-      </div>
-      <div class="form-row">
-        <label for="city">City:</label>
-        <input name="city" required><br>
-      </div>
-      <div class="form-row">
-        <label for="state">State:</label>
-        <input name="state" required><br>
-      </div>
-      <div class="form-row">
-        <label for="country">Country:</label>
-        <input name="country" placeholder="USA" required><br>
-      </div>
+  <form id="sampleForm">
+    <fieldset>
+      <legend>Customer Information</legend>
+      
+        <div class="form-row">
+          <label for="customer_name">Company:</label>
+          <input name="customer_name" placeholder="Company" required><br>
+        </div>
+        <div class="form-row">
+          <label for="street-address">Street Address:</label>
+          <input name="street-address" required><br>
+        </div>
+        <div class="form-row">
+          <label for="city">City:</label>
+          <input name="city" required><br>
+        </div>
+        <div class="form-row">
+          <label for="state">State:</label>
+          <input name="state" required><br>
+        </div>
+        <div class="form-row">
+          <label for="country">Country:</label>
+          <input name="country" placeholder="USA" required><br>
+        </div>
 
-      <div class="form-row">
-        <label for="customer-contact">Test requested by:</label>
-        <input name="customer-contact" required><br>
+        <div class="form-row">
+          <label for="customer-contact">Test requested by:</label>
+          <input name="customer-contact" required><br>
+        </div>
+        <div class="form-row">
+          <label for="customer-phone">Phone #:</label>
+          <input name="customer-phone" required><br>
+        </div>
+
+        <div class="form-row">
+          <label for="results-list">Results Distribution List / Main:</label>
+          <input name="results-list" class="email-tag-input" required>
+
+        </div>
+        <div class="form-row">
+          <label for="results-cc-list">Results Distribution List / CC:</label>
+          <input name="results-cc-list" class="email-tag-input">
+
+        </div>
+
+        <div class="form-row">
+          <label>Payment Method:</label><br>
+          <input type="radio" id="pay-po" name="payment_method" value="po" checked>
+          <label for="pay-po">Purchase Order</label>
+
+          <input type="radio" id="pay-cc" name="payment_method" value="cc">
+          <label for="pay-cc">Credit Card</label>
+        </div>
+
+        <!-- PO Number input -->
+        <div class="form-row" id="po-info">
+          <label for="po-number">PO Number:</label>
+          <input name="po-number" id="po-number" placeholder="Enter PO number">
+        </div>
+
+        <!-- CC info input -->
+        <div class="form-row" id="cc-info" style="display: none;">
+          <label for="cc-number">Credit Card (Last 4 digits & name):</label>
+          <input name="cc-number" id="cc-number" placeholder="1234 John Doe">
+        </div>
+
+        <div class="form-row">
+          <label for="invoice-list">Invoice Distribution List / Main:</label>
+          <input name="invoice-list" class="email-tag-input" required><br>
+
+        </div>
+        <div class="form-row">
+          <label for="invoice-cc-list">Invoice Distribution List / CC:</label>
+          <input name="invoice-cc-list" class="email-tag-input"><br>
+        </div>
+      </fieldset>
+
+      <h2>Sample Details</h2>
+      <div id="samples">
+        <!-- Row is filled by javascript-->
       </div>
-      <div class="form-row">
-        <label for="customer-phone">Phone #:</label>
-        <input name="customer-phone" required><br>
-      </div>
-
-      <div class="form-row">
-        <label for="results-list">Results Distribution List / Main:</label>
-        <input name="results-list" class="email-tag-input" required>
-
-      </div>
-      <div class="form-row">
-        <label for="results-cc-list">Results Distribution List / CC:</label>
-        <input name="results-cc-list" class="email-tag-input">
-
-      </div>
-
-      <div class="form-row">
-        <label>Payment Method:</label><br>
-        <input type="radio" id="pay-po" name="payment_method" value="po" checked>
-        <label for="pay-po">Purchase Order</label>
-
-        <input type="radio" id="pay-cc" name="payment_method" value="cc">
-        <label for="pay-cc">Credit Card</label>
-      </div>
-
-      <!-- PO Number input -->
-      <div class="form-row" id="po-info">
-        <label for="po-number">PO Number:</label>
-        <input name="po-number" id="po-number" placeholder="Enter PO number">
-      </div>
-
-      <!-- CC info input -->
-      <div class="form-row" id="cc-info" style="display: none;">
-        <label for="cc-number">Credit Card (Last 4 digits & name):</label>
-        <input name="cc-number" id="cc-number" placeholder="1234 John Doe">
-      </div>
-
-      <div class="form-row">
-        <label for="invoice-list">Invoice Distribution List / Main:</label>
-        <input name="invoice-list" class="email-tag-input" required><br>
-
-      </div>
-      <div class="form-row">
-        <label for="invoice-cc-list">Invoice Distribution List / CC:</label>
-        <input name="invoice-cc-list" class="email-tag-input"><br>
-      </div>
-    </fieldset>
-
-    <h2>Sample Details</h2>
-    <div id="samples">
-      <!-- Row is filled by javascript-->
-    </div>
 
     <button type="button" onclick="addSample()">+ Add Sample</button><br>
     <button type="submit">Submit</button>
@@ -112,5 +113,6 @@
       <button id="cancelBtn" type="button">Cancel</button>
     </div>
   </div>
+
 </body>
 </html>

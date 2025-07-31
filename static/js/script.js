@@ -15,12 +15,14 @@ async function addSample() {
   sampleId.name = "sample_id[]";
   sampleId.placeholder = "Sample ID";
   sampleId.required = true;
+  sampleId.value = "TEST_SAMPLE_ID";
 
   // Chemical matrix input
   const matrix = document.createElement("input");
   matrix.name = "chemical_matrix[]";
   matrix.placeholder = "Chemical Matrix";
   matrix.required = true;
+  matrix.value = "TEST_MATRIX";
 
   // Sample type dropdown (chemical, water, wafer)
   const sampleTypeSelect = document.createElement("select");
@@ -131,30 +133,7 @@ async function createAnalysisDropdown(index, sampleType) {
   }
 }
 
-// Handles form submission using Fetch API
-document.getElementById("sampleForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const form = new FormData(e.target);
-  const data = {};
-  for (let [key, value] of form.entries()) {
-    if (data[key]) {
-      if (!Array.isArray(data[key])) data[key] = [data[key]];
-      data[key].push(value);
-    } else {
-      data[key] = value;
-    }
-  }
 
-  // Send data to Flask route
-  const response = await fetch("/submit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
-
-  const result = await response.json();
-  alert(result.message || "Submitted successfully.");
-});
 
 // Creates first sample row when the page is first loaded
 document.addEventListener("DOMContentLoaded", async function () {
@@ -199,7 +178,7 @@ let pendingFormData = null;
 // Intercept form submission
 document.getElementById("sampleForm").addEventListener("submit", function(e) {
   e.preventDefault();
-
+  console.info("Submit handler triggered");
   // Collect form data
   const formData = new FormData(e.target);
 
@@ -214,7 +193,17 @@ document.getElementById("sampleForm").addEventListener("submit", function(e) {
     analyses.push(formData.getAll(`analysis[${i}][]`));
     i++;
   }
-
+  console.info("FormData keys:", Array.from(formData.keys()));
+  console.info("Sample IDs:", sampleIds);
+  console.info("Matrices:", matrices);
+  console.info("Types:", types);
+  console.info("Times:", times);
+  console.info("Analyses:", analyses);
+  console.log(document.getElementById("samples").innerHTML);
+  console.log("Raw FormData entries:");
+  for (let [key, value] of formData.entries()) {
+    console.log(key, value);
+  }
   // Build samples array
   const samples = sampleIds.map((id, idx) => ({
     sample_id: id,
@@ -223,7 +212,7 @@ document.getElementById("sampleForm").addEventListener("submit", function(e) {
     processing_time: times[idx],
     analyses: analyses[idx] || []
   }));
-
+  console.info("samples:",samples);
   // Gather other fields
   const data = {
     customer_phone: formData.get("customer-phone"),
