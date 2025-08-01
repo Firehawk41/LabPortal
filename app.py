@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -10,10 +11,16 @@ def index():
 @app.route("/submit", methods=["POST"])
 def submit():
     data = request.json
-    with open("submissions.txt", "a") as f:
-        f.write(str(data) + "\n")
-    return jsonify({"status": "ok", "message": "Submission saved"})
+
+    # Optionally, process/validate/transform data here
+    # For example, ensure 'samples' is a list of dicts, not a string
+
+    # Write to file
+    with open("submitted_request.json", "w") as f:
+        json.dump(data, f, indent=2)
+
+    return jsonify({"message": "Submission received and saved!"})
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000,debug=True)

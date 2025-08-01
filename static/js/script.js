@@ -215,12 +215,20 @@ document.getElementById("sampleForm").addEventListener("submit", function(e) {
   console.info("samples:",samples);
   // Gather other fields
   const data = {
+    customer_name: formData.get("customer-name"),
+    street_address: formData.get("street-address"),
+    city: formData.get("city"),
+    state: formData.get("state"),
+    country: formData.get("country"),
+    customer_contact: formData.get("customer-contact"),
     customer_phone: formData.get("customer-phone"),
     results_list: formData.get("results-list"),
     results_cc_list: formData.get("results-cc-list"),
     payment_method: formData.get("payment_method"),
     po_number: formData.get("po-number"),
     cc_number: formData.get("cc-number"),
+    invoice_list: formData.get("invoice-list"),
+    invoice_cc_list: formData.get("invoice-cc-list"),
     samples: samples
   };
 
