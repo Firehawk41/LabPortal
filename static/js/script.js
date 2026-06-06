@@ -1,12 +1,24 @@
-// Adds a new row of sample fields to the form.
-// Each row includes sample ID, matrix, sample type selector, analysis selector, and processing time.
-// The analysis selector updates dynamically based on the chosen sample type.
-async function addSample() {
-  // Get the container for sample rows
-  const sampleContainer = document.getElementById("samples");
-  const index = sampleContainer.children.length;
+let sampleCounter = 0;
+let pendingFormData = null;
 
-  // Create a new row for sample input fields
+function showFormError(message) {
+  const el = document.getElementById("form-error");
+  if (!el) return;
+  if (!message) {
+    el.style.display = "none";
+    el.textContent = "";
+    return;
+  }
+  el.textContent = message;
+  el.style.display = "block";
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// Adds a new row of sample fields to the form.
+async function addSample() {
+  const sampleContainer = document.getElementById("samples");
+  const index = sampleCounter++;
+
   const row = document.createElement("div");
   row.className = "sample-row";
 
@@ -15,44 +27,46 @@ async function addSample() {
   sampleId.name = "sample_id[]";
   sampleId.placeholder = "Sample ID";
   sampleId.required = true;
-  sampleId.value = "TEST_SAMPLE_ID";
 
   // Chemical matrix input
   const matrix = document.createElement("input");
   matrix.name = "chemical_matrix[]";
   matrix.placeholder = "Chemical Matrix";
   matrix.required = true;
-  matrix.value = "TEST_MATRIX";
 
-  // Sample type dropdown (chemical, water, wafer)
+  // Sample type dropdown
   const sampleTypeSelect = document.createElement("select");
-  sampleTypeSelect.name="sample_type[]";
+  sampleTypeSelect.name = "sample_type[]";
   sampleTypeSelect.className = "sample-type-select";
   const types = ["chemical", "water", "wafer"];
   types.forEach(type => {
     const option = document.createElement("option");
     option.value = type;
-    option.textContent = type.charAt(0).toUpperCase() + type.slice(1); // Capitalize
+    option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
     sampleTypeSelect.appendChild(option);
   });
 
-  // Processing time input
-  const processingTime = document.createElement("input");
+  // Processing time dropdown
+  const processingTime = document.createElement("select");
   processingTime.name = "processing_time[]";
-  processingTime.placeholder = "Processing Time";
   processingTime.required = true;
+  ["Standard", "Next Day", "Rush"].forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    processingTime.appendChild(opt);
+  });
 
-  // Create analysis dropdown based on sample type
+  // Analysis dropdown (async, filtered by sample type)
   let analysisSelect = await createAnalysisDropdown(index, sampleTypeSelect.value);
 
-  // Append all inputs to the row
   row.appendChild(sampleId);
   row.appendChild(matrix);
   row.appendChild(sampleTypeSelect);
   row.appendChild(analysisSelect);
   row.appendChild(processingTime);
 
-  // When sample type changes, update the analysis dropdown accordingly
+  // Update analysis dropdown when sample type changes
   sampleTypeSelect.addEventListener("change", async function () {
     const newAnalysisSelect = await createAnalysisDropdown(index, this.value);
     $(analysisSelect).select2("destroy");
@@ -65,12 +79,8 @@ async function addSample() {
     analysisSelect = newAnalysisSelect;
   });
 
-
-
-  // Add the row to the form
   sampleContainer.appendChild(row);
 
-  // Initialize Select2 for the analysis dropdown
   $(analysisSelect).select2({
     placeholder: "Select analyses",
     width: "100%",
@@ -85,16 +95,12 @@ function filterAnalysesByType(data, sampleType) {
         opt.sample_types.includes(sampleType)
       );
       if (filteredOptions.length > 0) {
-        return {
-          group: group.group,
-          options: filteredOptions
-        };
+        return { group: group.group, options: filteredOptions };
       }
       return null;
     })
-    .filter(Boolean); // remove nulls
+    .filter(Boolean);
 }
-
 
 async function createAnalysisDropdown(index, sampleType) {
   try {
@@ -102,57 +108,54 @@ async function createAnalysisDropdown(index, sampleType) {
     if (!response.ok) throw new Error("Failed to load analyses");
     const allData = await response.json();
 
-    // Filter based on sample type
     const filteredGroups = filterAnalysesByType(allData, sampleType);
 
-    // Create select element
     const select = document.createElement("select");
     select.name = `analysis[${index}][]`;
     select.className = "analysis-select";
     select.multiple = true;
 
-    // Populate with optgroups and options
     filteredGroups.forEach(group => {
       const optgroup = document.createElement("optgroup");
       optgroup.label = group.group;
-
       group.options.forEach(opt => {
         const option = document.createElement("option");
         option.value = opt.id;
         option.textContent = opt.label;
-        option.title = opt.long_description;
+        if (opt.long_description) option.title = opt.long_description;
         optgroup.appendChild(option);
       });
-
       select.appendChild(optgroup);
     });
 
     return select;
   } catch (err) {
-    alert("Error loading analyses: " + err.message);
+    console.error("Error loading analyses:", err);
+    const errSelect = document.createElement("select");
+    errSelect.disabled = true;
+    errSelect.className = "analysis-select";
+    errSelect.innerHTML = "<option>Error loading analyses — reload page</option>";
+    return errSelect;
   }
 }
 
-
-
-// Creates first sample row when the page is first loaded
+// Create the first sample row on page load
 document.addEventListener("DOMContentLoaded", async function () {
-  await addSample();  // create the first sample row
+  await addSample();
 });
 
-// Listener for Tagify functionality
+// Initialise Tagify on email inputs
 document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll('.email-tag-input').forEach(input => {
+  document.querySelectorAll(".email-tag-input").forEach(input => {
     new Tagify(input, {
-      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,  // Basic email regex
+      pattern: /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/,
       duplicates: false,
-      dropdown: {
-        enabled: 0 // disable suggestions
-      }
+      dropdown: { enabled: 0 }
     });
   });
 });
 
+// Payment method visibility toggle
 const poInfo = document.getElementById("po-info");
 const ccInfo = document.getElementById("cc-info");
 
@@ -163,48 +166,60 @@ document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
       ccInfo.style.display = "none";
       document.getElementById("po-number").required = true;
       document.getElementById("cc-number").required = false;
+      document.getElementById("cc-number").value = "";
     } else {
       poInfo.style.display = "none";
       ccInfo.style.display = "block";
       document.getElementById("po-number").required = false;
       document.getElementById("cc-number").required = true;
+      document.getElementById("po-number").value = "";
     }
   });
 });
 
-// Store form data for confirmation
-let pendingFormData = null;
+// ESC key closes the modal
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") {
+    const modal = document.getElementById("confirmationModal");
+    if (modal.style.display !== "none") {
+      modal.style.display = "none";
+      pendingFormData = null;
+    }
+  }
+});
 
-// Intercept form submission
-document.getElementById("sampleForm").addEventListener("submit", function(e) {
+// Clicking the backdrop also closes the modal
+document.getElementById("confirmationModal").addEventListener("click", function (e) {
+  if (e.target === this) {
+    this.style.display = "none";
+    pendingFormData = null;
+  }
+});
+
+// Intercept form submission — validate, build JSON, show confirmation modal
+document.getElementById("sampleForm").addEventListener("submit", function (e) {
   e.preventDefault();
-  console.info("Submit handler triggered");
-  // Collect form data
+  showFormError("");
+
   const formData = new FormData(e.target);
 
-  // Gather sample arrays
   const sampleIds = formData.getAll("sample_id[]");
-  const matrices = formData.getAll("chemical_matrix[]");
-  const types = formData.getAll("sample_type[]");
-  const times = formData.getAll("processing_time[]");
+  if (sampleIds.length === 0) {
+    showFormError("Please add at least one sample before submitting.");
+    return;
+  }
+
+  const matrices  = formData.getAll("chemical_matrix[]");
+  const types     = formData.getAll("sample_type[]");
+  const times     = formData.getAll("processing_time[]");
+
   const analyses = [];
   let i = 0;
   while (formData.has(`analysis[${i}][]`)) {
     analyses.push(formData.getAll(`analysis[${i}][]`));
     i++;
   }
-  console.info("FormData keys:", Array.from(formData.keys()));
-  console.info("Sample IDs:", sampleIds);
-  console.info("Matrices:", matrices);
-  console.info("Types:", types);
-  console.info("Times:", times);
-  console.info("Analyses:", analyses);
-  console.log(document.getElementById("samples").innerHTML);
-  console.log("Raw FormData entries:");
-  for (let [key, value] of formData.entries()) {
-    console.log(key, value);
-  }
-  // Build samples array
+
   const samples = sampleIds.map((id, idx) => ({
     sample_id: id,
     chemical_matrix: matrices[idx],
@@ -212,50 +227,71 @@ document.getElementById("sampleForm").addEventListener("submit", function(e) {
     processing_time: times[idx],
     analyses: analyses[idx] || []
   }));
-  console.info("samples:",samples);
-  // Gather other fields
-  const data = {
-    customer_name: formData.get("customer-name"),
-    street_address: formData.get("street-address"),
-    city: formData.get("city"),
-    state: formData.get("state"),
-    country: formData.get("country"),
+
+  pendingFormData = {
+    customer_name:    formData.get("customer-name"),
+    street_address:   formData.get("street-address"),
+    city:             formData.get("city"),
+    state:            formData.get("state"),
+    country:          formData.get("country"),
     customer_contact: formData.get("customer-contact"),
-    customer_phone: formData.get("customer-phone"),
-    results_list: formData.get("results-list"),
-    results_cc_list: formData.get("results-cc-list"),
-    payment_method: formData.get("payment_method"),
-    po_number: formData.get("po-number"),
-    cc_number: formData.get("cc-number"),
-    invoice_list: formData.get("invoice-list"),
-    invoice_cc_list: formData.get("invoice-cc-list"),
-    samples: samples
+    customer_phone:   formData.get("customer-phone"),
+    results_list:     formData.get("results-list"),
+    results_cc_list:  formData.get("results-cc-list"),
+    payment_method:   formData.get("payment_method"),
+    po_number:        formData.get("po-number"),
+    cc_number:        formData.get("cc-number"),
+    invoice_list:     formData.get("invoice-list"),
+    invoice_cc_list:  formData.get("invoice-cc-list"),
+    samples:          samples
   };
 
-  // Save for later submission
-  pendingFormData = data;
-
-  // Show modal with JSON summary
-  document.getElementById("jsonSummary").textContent = JSON.stringify(data, null, 2);
+  document.getElementById("jsonSummary").textContent = JSON.stringify(pendingFormData, null, 2);
   document.getElementById("confirmationModal").style.display = "block";
 });
 
-// Confirm button submits to server
-document.getElementById("confirmBtn").onclick = async function() {
+// Confirm button — submit to server with loading state
+document.getElementById("confirmBtn").onclick = async function () {
+  const confirmBtn = document.getElementById("confirmBtn");
+  const submitBtn  = document.getElementById("submitBtn");
+
   document.getElementById("confirmationModal").style.display = "none";
-  // Submit to backend
-  const res = await fetch("/submit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(pendingFormData)
-  });
-  const result = await res.json();
-  alert(result.message);
+  confirmBtn.disabled = true;
+  submitBtn.disabled  = true;
+  submitBtn.textContent = "Submitting…";
+
+  try {
+    const res = await fetch("/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pendingFormData)
+    });
+
+    const result = await res.json();
+
+    if (res.ok) {
+      showFormError("");
+      alert(`Submission received!\nYour submission ID is: ${result.submission_id}`);
+      location.reload();
+    } else {
+      const messages = result.errors
+        ? result.errors.join("\n")
+        : (result.error || "Unknown server error.");
+      showFormError("Submission failed:\n" + messages);
+    }
+  } catch (networkErr) {
+    showFormError("Network error — check your connection and try again.");
+  } finally {
+    confirmBtn.disabled = false;
+    submitBtn.disabled  = false;
+    submitBtn.textContent = "Submit";
+  }
+
   pendingFormData = null;
 };
 
 // Cancel button hides modal
-document.getElementById("cancelBtn").onclick = function() {
+document.getElementById("cancelBtn").onclick = function () {
   document.getElementById("confirmationModal").style.display = "none";
   pendingFormData = null;
 };
