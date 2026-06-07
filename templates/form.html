@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PRECILAB Testing Request Form</title>
 
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
+
   <!-- Select2 4.0.13 (stable — not RC) -->
   <!-- TODO: add integrity="sha384-..." crossorigin="anonymous" after verifying at https://www.srihash.org/ -->
   <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
@@ -87,7 +89,7 @@
       </div>
 
       <!-- CC info input -->
-      <div class="form-row" id="cc-info" style="display: none;">
+      <div class="form-row hidden" id="cc-info">
         <label for="cc-number">Credit Card (Last 4 digits &amp; name):</label>
         <input name="cc-number" id="cc-number" placeholder="1234 John Doe">
       </div>
@@ -109,7 +111,7 @@
 
     <button type="button" onclick="addSample()">+ Add Sample</button><br>
 
-    <div id="form-error" role="alert" style="display:none; color:red; margin:1em 0;"></div>
+    <div id="form-error" role="alert" class="form-error hidden"></div>
     <button type="submit" id="submitBtn">Submit</button>
   </form>
 
@@ -118,10 +120,10 @@
        role="dialog"
        aria-modal="true"
        aria-labelledby="modalTitle"
-       style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:1000;">
-    <div style="background:#fff; margin:10vh auto; padding:2em; width:400px; border-radius:8px;">
+       class="modal-overlay hidden">
+    <div class="modal-box">
       <h2 id="modalTitle">Review Your Submission</h2>
-      <pre id="jsonSummary" style="max-height:300px; overflow:auto; background:#eee; padding:1em;"></pre>
+      <pre id="jsonSummary" class="json-summary"></pre>
       <button id="confirmBtn" type="button">Confirm &amp; Submit</button>
       <button id="cancelBtn" type="button">Cancel</button>
     </div>

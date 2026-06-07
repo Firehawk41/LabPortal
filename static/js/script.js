@@ -5,12 +5,12 @@ function showFormError(message) {
   const el = document.getElementById("form-error");
   if (!el) return;
   if (!message) {
-    el.style.display = "none";
+    el.classList.add("hidden");
     el.textContent = "";
     return;
   }
   el.textContent = message;
-  el.style.display = "block";
+  el.classList.remove("hidden");
   el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -162,14 +162,14 @@ const ccInfo = document.getElementById("cc-info");
 document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
   radio.addEventListener("change", function () {
     if (this.value === "po") {
-      poInfo.style.display = "block";
-      ccInfo.style.display = "none";
+      poInfo.classList.remove("hidden");
+      ccInfo.classList.add("hidden");
       document.getElementById("po-number").required = true;
       document.getElementById("cc-number").required = false;
       document.getElementById("cc-number").value = "";
     } else {
-      poInfo.style.display = "none";
-      ccInfo.style.display = "block";
+      poInfo.classList.add("hidden");
+      ccInfo.classList.remove("hidden");
       document.getElementById("po-number").required = false;
       document.getElementById("cc-number").required = true;
       document.getElementById("po-number").value = "";
@@ -181,8 +181,8 @@ document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
 document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") {
     const modal = document.getElementById("confirmationModal");
-    if (modal.style.display !== "none") {
-      modal.style.display = "none";
+    if (!modal.classList.contains("hidden")) {
+      modal.classList.add("hidden");
       pendingFormData = null;
     }
   }
@@ -191,7 +191,7 @@ document.addEventListener("keydown", function (e) {
 // Clicking the backdrop also closes the modal
 document.getElementById("confirmationModal").addEventListener("click", function (e) {
   if (e.target === this) {
-    this.style.display = "none";
+    this.classList.add("hidden");
     pendingFormData = null;
   }
 });
@@ -247,7 +247,7 @@ document.getElementById("sampleForm").addEventListener("submit", function (e) {
   };
 
   document.getElementById("jsonSummary").textContent = JSON.stringify(pendingFormData, null, 2);
-  document.getElementById("confirmationModal").style.display = "block";
+  document.getElementById("confirmationModal").classList.remove("hidden");
 });
 
 // Confirm button — submit to server with loading state
@@ -255,7 +255,7 @@ document.getElementById("confirmBtn").onclick = async function () {
   const confirmBtn = document.getElementById("confirmBtn");
   const submitBtn  = document.getElementById("submitBtn");
 
-  document.getElementById("confirmationModal").style.display = "none";
+  document.getElementById("confirmationModal").classList.add("hidden");
   confirmBtn.disabled = true;
   submitBtn.disabled  = true;
   submitBtn.textContent = "Submitting…";
@@ -292,6 +292,6 @@ document.getElementById("confirmBtn").onclick = async function () {
 
 // Cancel button hides modal
 document.getElementById("cancelBtn").onclick = function () {
-  document.getElementById("confirmationModal").style.display = "none";
+  document.getElementById("confirmationModal").classList.add("hidden");
   pendingFormData = null;
 };
