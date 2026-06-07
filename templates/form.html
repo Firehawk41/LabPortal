@@ -28,10 +28,24 @@
 
 </head>
 <body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a href="/" class="site-header__brand">PRECILAB</a>
+      <nav class="site-header__nav" aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/">Services</a>
+        <a href="/" class="is-active" aria-current="page">Request Testing</a>
+        <a href="/">About</a>
+        <a href="/">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
   <h1>Testing Request Form</h1>
 
   <form id="sampleForm">
-    <fieldset>
+    <fieldset class="form-section">
       <legend>Customer Information</legend>
 
       <div class="form-row">
@@ -104,16 +118,47 @@
       </div>
     </fieldset>
 
-    <h2>Sample Details</h2>
-    <div id="samples">
-      <!-- Rows populated by script.js -->
-    </div>
+    <section class="form-section">
+      <h2>Sample Details</h2>
+      <div id="samples">
+        <!-- Rows populated by script.js -->
+      </div>
 
-    <button type="button" onclick="addSample()">+ Add Sample</button><br>
+      <button type="button" class="btn btn--secondary" onclick="addSample()">+ Add Sample</button>
+    </section>
 
     <div id="form-error" role="alert" class="form-error hidden"></div>
-    <button type="submit" id="submitBtn">Submit</button>
+    <button type="submit" id="submitBtn" class="btn btn--primary">Submit</button>
   </form>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__links">
+      <div class="site-footer__col">
+        <h3>Company</h3>
+        <a href="/">About Us</a>
+        <a href="/">Careers</a>
+        <a href="/">News</a>
+      </div>
+      <div class="site-footer__col">
+        <h3>Services</h3>
+        <a href="/">Testing Capabilities</a>
+        <a href="/">Sample Requirements</a>
+        <a href="/">Turnaround Times</a>
+      </div>
+      <div class="site-footer__col">
+        <h3>Support</h3>
+        <a href="/">Request Testing</a>
+        <a href="/">FAQs</a>
+        <a href="/">Contact Us</a>
+      </div>
+    </div>
+    <div class="site-footer__contact">
+      <p>123 Industrial Parkway, Springfield, IL 62704</p>
+      <p>Phone: (555) 123-4567</p>
+      <p>&copy; PRECILAB. All rights reserved.</p>
+    </div>
+  </footer>
 
   <!-- Modal Confirmation (hidden by default) -->
   <div id="confirmationModal"
@@ -124,8 +169,8 @@
     <div class="modal-box">
       <h2 id="modalTitle">Review Your Submission</h2>
       <pre id="jsonSummary" class="json-summary"></pre>
-      <button id="confirmBtn" type="button">Confirm &amp; Submit</button>
-      <button id="cancelBtn" type="button">Cancel</button>
+      <button id="confirmBtn" type="button" class="btn btn--primary">Confirm &amp; Submit</button>
+      <button id="cancelBtn" type="button" class="btn btn--secondary">Cancel</button>
     </div>
   </div>
 
