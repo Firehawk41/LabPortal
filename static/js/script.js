@@ -69,23 +69,19 @@ async function addSample() {
   // Update analysis dropdown when sample type changes
   sampleTypeSelect.addEventListener("change", async function () {
     const newAnalysisSelect = await createAnalysisDropdown(index, this.value);
-    $(analysisSelect).select2("destroy");
+    if (typeof $ !== "undefined") $(analysisSelect).select2("destroy");
     analysisSelect.replaceWith(newAnalysisSelect);
-    $(newAnalysisSelect).select2({
-      placeholder: "Select analyses",
-      width: "100%",
-      allowClear: true
-    });
+    if (typeof $ !== "undefined") {
+      $(newAnalysisSelect).select2({ placeholder: "Select analyses", width: "100%", allowClear: true });
+    }
     analysisSelect = newAnalysisSelect;
   });
 
   sampleContainer.appendChild(row);
 
-  $(analysisSelect).select2({
-    placeholder: "Select analyses",
-    width: "100%",
-    allowClear: true
-  });
+  if (typeof $ !== "undefined") {
+    $(analysisSelect).select2({ placeholder: "Select analyses", width: "100%", allowClear: true });
+  }
 }
 
 function filterAnalysesByType(data, sampleType) {
@@ -139,13 +135,15 @@ async function createAnalysisDropdown(index, sampleType) {
   }
 }
 
-// Create the first sample row on page load
+// Create the first sample row on page load and wire up the add button
 document.addEventListener("DOMContentLoaded", async function () {
+  document.getElementById("addSampleBtn").addEventListener("click", addSample);
   await addSample();
 });
 
 // Initialise Tagify on email inputs
 document.addEventListener("DOMContentLoaded", function () {
+  if (typeof Tagify === "undefined") return;
   document.querySelectorAll(".email-tag-input").forEach(input => {
     new Tagify(input, {
       pattern: /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/,
