@@ -1,4 +1,4 @@
-# FlaskTestingRequest — PRECILAB Lab Testing Request Portal
+# FlaskTestingRequest — Lab Testing Request Portal
 
 A Flask web application for an ISO 17025 accredited analytical chemistry lab. Customers log in to submit multi-section laboratory testing requests (company info, payment, email distribution lists, and one or more samples with analysis selections). Lab staff use an admin dashboard to review submissions, update their status, and manage customer accounts.
 
