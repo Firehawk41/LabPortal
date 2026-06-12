@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Users — PRECILAB Admin{% endblock %}
+
+{% block body_class %}admin-theme{% endblock %}
+
+{% block extra_head %}
+  <link href="{{ url_for('static', filename='css/admin.css') }}" rel="stylesheet" />
+{% endblock %}
+
+{% block nav %}
+  <a href="{{ url_for('admin.submissions') }}">Submissions</a>
+  <a href="{{ url_for('admin.users') }}" class="is-active" aria-current="page">Users</a>
+  <a href="{{ url_for('main.index') }}">Request Testing</a>
+  <a href="{{ url_for('auth.logout') }}">Logout</a>
+{% endblock %}
+
+{% block content %}
+  <h1>Users</h1>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Company</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+        <tr>
+          <td>{{ user.email }}</td>
+          <td>{{ user.role }}</td>
+          <td>{{ user.company_name or '—' }}</td>
+          <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4">No users yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <section class="form-section">
+    <h2>Create Customer Account</h2>
+
+    {% if error %}
+      <div class="form-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin.create_user') }}">
+      <div class="form-row">
+        <label for="new-email">Email:</label>
+        <input type="email" name="email" id="new-email" required>
+      </div>
+      <div class="form-row">
+        <label for="new-password">Password:</label>
+        <input type="password" name="password" id="new-password" required>
+      </div>
+      <div class="form-row">
+        <label for="new-company-name">Company Name:</label>
+        <input type="text" name="company_name" id="new-company-name">
+      </div>
+      <div class="form-row">
+        <label for="new-role">Role:</label>
+        <select name="role" id="new-role">
+          {% for role in valid_roles %}
+            <option value="{{ role }}">{{ role }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn--primary">Create User</button>
+    </form>
+  </section>
+{% endblock %}

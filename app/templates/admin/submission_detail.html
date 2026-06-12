@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Submission {{ (submission.id|string)[:8] }} — PRECILAB Admin{% endblock %}
+
+{% block body_class %}admin-theme{% endblock %}
+
+{% block extra_head %}
+  <link href="{{ url_for('static', filename='css/admin.css') }}" rel="stylesheet" />
+{% endblock %}
+
+{% block nav %}
+  <a href="{{ url_for('admin.submissions') }}">Submissions</a>
+  <a href="{{ url_for('admin.users') }}">Users</a>
+  <a href="{{ url_for('main.index') }}">Request Testing</a>
+  <a href="{{ url_for('auth.logout') }}">Logout</a>
+{% endblock %}
+
+{% block content %}
+  <h1>Submission {{ (submission.id|string)[:8] }}</h1>
+
+  <section class="form-section">
+    <h2>Status</h2>
+    <p>
+      <span class="status-badge status-badge--{{ submission.status }}">{{ submission.status.replace('_', ' ') }}</span>
+    </p>
+    <form class="status-form" method="post" action="{{ url_for('admin.update_submission_status', submission_id=submission.id) }}">
+      <select name="status">
+        {% for status in valid_statuses %}
+          <option value="{{ status }}" {% if status == submission.status %}selected{% endif %}>{{ status.replace('_', ' ') }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn--primary">Update Status</button>
+    </form>
+  </section>
+
+  <section class="form-section">
+    <h2>Customer Information</h2>
+    <dl class="detail-grid">
+      <dt>Company</dt><dd>{{ submission.customer_name }}</dd>
+      <dt>Address</dt><dd>{{ submission.street_address }}, {{ submission.city }}, {{ submission.state }}, {{ submission.country }}</dd>
+      <dt>Contact</dt><dd>{{ submission.customer_contact }}</dd>
+      <dt>Phone</dt><dd>{{ submission.customer_phone }}</dd>
+      <dt>Submitted</dt><dd>{{ submission.submitted_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+    </dl>
+  </section>
+
+  <section class="form-section">
+    <h2>Payment &amp; Distribution</h2>
+    <dl class="detail-grid">
+      <dt>Payment Method</dt>
+      <dd>{{ 'Purchase Order' if submission.payment_method == 'po' else 'Credit Card' }}</dd>
+      {% if submission.payment_method == 'po' %}
+        <dt>PO Number</dt><dd>{{ submission.po_number }}</dd>
+      {% else %}
+        <dt>Credit Card</dt><dd>{{ submission.cc_number }}</dd>
+      {% endif %}
+      <dt>Results To</dt><dd>{{ submission.results_list|join(', ') }}</dd>
+      <dt>Results CC</dt><dd>{{ submission.results_cc_list|join(', ') or '—' }}</dd>
+      <dt>Invoice To</dt><dd>{{ submission.invoice_list|join(', ') }}</dd>
+      <dt>Invoice CC</dt><dd>{{ submission.invoice_cc_list|join(', ') or '—' }}</dd>
+    </dl>
+  </section>
+
+  <section class="form-section">
+    <h2>Samples ({{ submission.samples|length }})</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Sample ID</th>
+          <th>Chemical Matrix</th>
+          <th>Type</th>
+          <th>Processing Time</th>
+          <th>Analyses</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sample in submission.samples %}
+          <tr>
+            <td>{{ sample.sample_id }}</td>
+            <td>{{ sample.chemical_matrix }}</td>
+            <td>{{ sample.sample_type }}</td>
+            <td>{{ sample.processing_time }}</td>
+            <td>{{ sample.analyses|join(', ') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

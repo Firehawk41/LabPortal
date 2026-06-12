@@ -1,47 +1,78 @@
-# PRECILAB Testing Request Form — Claude Context
+# PRECILAB Testing Request Portal — Claude Context
 
 ## What This Is
 
-A Flask web app for submitting laboratory testing requests. Customers fill out a multi-section form (company info, payment, email distribution lists, sample details) and the submission is saved server-side. Internal project name: PRECILAB.
+A Flask web app for an ISO 17025 accredited analytical chemistry lab. Authenticated customers fill out a multi-section testing request form (company info, payment, email distribution lists, sample details); lab staff (admins) review submissions and update their status from a dashboard. Internal project name: PRECILAB.
 
 ## How to Run
 
 ```bash
-pip install flask
-python app.py
-# http://127.0.0.1:5000
+cp .env.example .env   # set FLASK_SECRET_KEY, DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+pip install -r requirements.txt
+python seed.py          # creates tables + demo admin/customer/submission data
+python wsgi.py          # http://127.0.0.1:5000
 ```
+
+Or via Docker Compose: `docker compose up --build`.
 
 ## File Map
 
 ```
-app.py                        # Flask server — validation, storage, security headers
-templates/form.html           # Full multi-section form UI
-static/js/script.js           # Client-side form logic (Select2, Tagify, modal)
-static/data/analyses.json     # Catalog of ~43 analyses in 7 groups
-requirements.txt              # Flask>=3.0,<4.0
-submissions.jsonl             # Append-only submission log (gitignored)
-submitted_request.json        # Latest submission snapshot (gitignored)
+wsgi.py                       # WSGI entry point — `app = create_app()`
+seed.py                        # Creates tables + demo data (admin, 3 customers, 5 submissions)
+app/
+├── __init__.py                # create_app() application factory, blueprint registration, security headers
+├── extensions.py              # db (SQLAlchemy), bcrypt, login_manager — shared singletons
+├── domain.py                  # Pure dataclasses: Sample, TestingRequest (no Flask/SQLAlchemy imports)
+├── models.py                  # SQLAlchemy models: User, Submission, Sample, AuditLog
+├── schemas.py                 # marshmallow schemas: SampleSchema, SubmissionSchema; parse_tagify()
+├── repositories.py            # SubmissionRepository — translates domain objects <-> ORM models
+├── auth/                       # Blueprint: /login, /logout
+│   ├── decorators.py           # login_required (re-export), admin_required
+│   └── routes.py
+├── main/                        # Blueprint: / (form), /submit
+│   └── routes.py
+├── admin/                        # Blueprint: /admin/* (dashboard, submissions, users)
+│   └── routes.py
+└── templates/
+    ├── base.html                  # Shared layout (header/nav/footer blocks)
+    ├── login.html
+    ├── form.html                   # Full multi-section form UI (moved here, minimal nav changes)
+    └── admin/
+        ├── submissions.html        # Paginated submission list + inline status update
+        ├── submission_detail.html  # Full submission detail incl. samples/analyses
+        └── users.html               # User list + create-customer form
+static/
+├── css/style.css               # Corporate light theme (unchanged)
+├── css/admin.css                # Dark theme overrides for admin pages (.admin-theme)
+├── js/script.js                # Client-side form logic (Select2, Tagify, modal) — unchanged
+└── data/analyses.json          # Catalog of ~43 analyses in 7 groups — unchanged
 ```
 
 ## Current Architecture
 
-- **Backend:** Flask only — no database, flat-file storage
-- **Storage:** `submissions.jsonl` (one JSON object per line, append-only); `submitted_request.json` is a latest-submission snapshot kept for backwards compatibility
-- **Frontend:** Vanilla JS + jQuery 3.7.1 + Select2 4.0.13 + Tagify 4.31.3 (all CDN, pinned)
-- **Auth:** None — form is fully public
-- **No email sending, no admin view, no user accounts**
+- **Backend:** Flask application factory + Blueprints (`auth`, `main`, `admin`)
+- **Database:** PostgreSQL via Flask-SQLAlchemy. Tables: `users`, `submissions`, `samples`, `audit_log` (audit_log table exists but has no routes/UI yet — repositories leave `# TODO` markers for future audit writes)
+- **Three-layer separation, strictly enforced:**
+  - `domain.py` — pure dataclasses (`Sample`, `TestingRequest`), zero framework imports
+  - `schemas.py` — marshmallow boundary: validates/deserializes incoming JSON into domain objects, rejects bad input with 400 + descriptive JSON errors (never 500)
+  - `repositories.py` — `SubmissionRepository` is the only place that converts domain objects <-> ORM models; route handlers never touch `db.session` for submissions/samples directly
+- **Auth:** Flask-Login + Flask-Bcrypt. Single `users` table with `role` column (`customer` | `admin`). No self-registration — admins create customer accounts via `/admin/users/create`
+- **Frontend:** Vanilla JS + jQuery 3.7.1 + Select2 4.0.13 + Tagify 4.31.3 (all CDN, pinned) — unchanged from prior phase
+- **Security headers** set via `@app.after_request` in `app/__init__.py`: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- **1 MB request cap** via `MAX_CONTENT_LENGTH`
 
 ## Key Backend Facts
 
-- `validate_submission()` in `app.py` validates every field server-side and returns a `(normalized_dict, errors_list)` tuple
-- Tagify email fields arrive as raw JSON strings (`'[{"value":"a@b.com"}]'`) and are parsed by `parse_tagify()`
-- Every submission gets a UUID `submission_id` and UTC ISO `submitted_at` timestamp injected by the server
-- Security headers set via `@app.after_request`: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
-- 1 MB request cap via `MAX_CONTENT_LENGTH`
-- Returns 201 on success, 422 with `{"errors": [...]}` on validation failure, 415/400/500 for other cases
-- `VALID_SAMPLE_TYPES = {"chemical", "water", "wafer"}`
-- `VALID_PROCESSING_TIMES = {"Standard", "Next Day", "Rush"}`
+- `parse_tagify()` and `EMAIL_RE` live in `app/schemas.py`; Tagify email fields arrive as raw JSON strings (`'[{"value":"a@b.com"}]'`) and are parsed/validated by the custom `TagifyEmailList` marshmallow field
+- `SubmissionSchema.load()` returns a `TestingRequest` domain object (via `@post_load`), not a dict; `SampleSchema` likewise returns `Sample`
+- `POST /submit` is `@login_required`; on success stamps `current_user.id` as `user_id`, calls `SubmissionRepository.save()`, returns 201 with `{"message": "Submission received", "submission_id": "<uuid>"}`; validation failures return 400 with `{"errors": {...}}`
+- `VALID_SAMPLE_TYPES` (schemas.py): `chemical`, `water`, `wafer`
+- `VALID_PROCESSING_TIMES` (schemas.py): `Standard`, `Next Day`, `Rush`
+- `VALID_ROLES` (models.py): `customer`, `admin`
+- `VALID_STATUSES` (models.py): `received`, `in_progress`, `complete`
+- All primary keys are UUIDs (`UUID(as_uuid=True), default=uuid.uuid4`)
+- `@admin_required` (app/auth/decorators.py) wraps `@login_required` and aborts 403 for non-admins
 
 ## Key Frontend Facts
 
@@ -51,13 +82,12 @@ submitted_request.json        # Latest submission snapshot (gitignored)
 - `createAnalysisDropdown()` returns a disabled placeholder `<select>` on fetch failure (never returns undefined)
 - Processing time is a `<select>` restricted to Standard / Next Day / Rush
 - All 11 customer-info inputs have matching `id` and `for` attributes for label linkage
+- `form.html`'s nav gains an "Admin" link (for admin users) and "Logout" link, but is otherwise unchanged
 
-## Submitted JSON Shape
+## Submitted JSON Shape (POST /submit)
 
 ```json
 {
-  "submission_id": "uuid",
-  "submitted_at": "2025-01-01T00:00:00+00:00",
   "customer_name": "Acme Corp",
   "street_address": "123 Main St",
   "city": "Springfield",
@@ -65,10 +95,10 @@ submitted_request.json        # Latest submission snapshot (gitignored)
   "country": "USA",
   "customer_contact": "Jane Doe",
   "customer_phone": "555-1234",
-  "results_list": ["jane@acme.com"],
-  "results_cc_list": [],
-  "invoice_list": ["ap@acme.com"],
-  "invoice_cc_list": [],
+  "results_list": "[{\"value\":\"jane@acme.com\"}]",
+  "results_cc_list": "[]",
+  "invoice_list": "[{\"value\":\"ap@acme.com\"}]",
+  "invoice_cc_list": "[]",
   "payment_method": "po",
   "po_number": "PO-9876",
   "cc_number": "",
@@ -84,48 +114,46 @@ submitted_request.json        # Latest submission snapshot (gitignored)
 }
 ```
 
+`results_list`/`results_cc_list`/`invoice_list`/`invoice_cc_list` arrive as raw Tagify JSON strings and are parsed server-side into plain email lists by `TagifyEmailList`.
+
 ---
 
 ## Suggested Improvements
 
-### High Priority
-
-- **SQLite database** (Flask-SQLAlchemy) — replace JSONL flat-file storage; enables searching, filtering, pagination, status updates, and linking submissions to customers
-- **Admin dashboard** (`/admin`) — password-protected view for lab staff to see all submissions, filter by date/status/customer, view full detail per submission
-- **Customer accounts** — registration/login so customers can see their own submission history; requires user table, Flask-Login, session management
-- **Submission status tracking** — `Received → In Progress → Complete → Reported`; lab staff update it from the admin view; customer can see their submission's status
-- **Email confirmation** — auto-send confirmation to customer and notification to lab staff on each new submission (Flask-Mail + SMTP or SendGrid)
-
-### Medium Priority
-
-- **Delete sample button** — users currently cannot remove a sample row without refreshing the page; add an ✕ button per row that removes it from the DOM and destroys its Select2 instance
-- **Notes / special instructions** — free-text textarea per submission for special handling; very common on lab request forms
-- **Flask Blueprints** — split into `main` (customer form) and `admin` (staff dashboard) blueprints once admin routes are added
-- **CSS / visual design** — no stylesheet currently; bare HTML; needs styling before any external demo
-- **SRI hashes on CDN links** — all five CDN tags need `integrity="sha384-..."` `crossorigin="anonymous"` attributes; compute at srihash.org
-
-### Lower Priority
-
-- **"Copy last sample" button** — duplicate a row for high-throughput submissions
-- **Billing code / cost center field** — common in enterprise lab requests
-- **File attachments** — let customers upload COAs, SDSs, or protocols
-- **Analysis descriptions shown in UI** — `long_description` and `short_description` exist in analyses.json but only appear as hover tooltips; a side panel or expandable detail would be more discoverable
-- **Self-host CDN dependencies** — bundle jQuery/Select2/Tagify locally so the app works offline and CDN outages don't break it
-- **gunicorn / WSGI deploy instructions** — `python app.py` is not production-safe; add a `Procfile` or deployment note
-
 ### Already Done (do not re-suggest)
 
-- Server-side validation with descriptive error messages
+- SQLite/PostgreSQL database via SQLAlchemy (replaced flat-file JSONL storage)
+- Admin dashboard (`/admin/submissions`, `/admin/submissions/<id>`, `/admin/users`)
+- Customer accounts with login (Flask-Login + bcrypt); admin-created, no self-registration
+- Submission status tracking (`received` / `in_progress` / `complete`), updatable from admin view
+- Flask Blueprints (`auth`, `main`, `admin`)
+- Dark admin theme (`admin.css`, `.admin-theme`) consistent with corporate palette
+- Server-side validation with descriptive error messages (marshmallow)
 - Tagify email field parsing on the backend
-- UUID submission IDs and UTC timestamps
+- UUID primary keys throughout
 - Security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy)
 - 1 MB request size cap
-- Append-only JSONL storage
 - All input `id` / `for` label linkage
-- Pinned CDN versions (Select2 RC → stable)
+- Pinned CDN versions
 - Accessible modal (role, aria-modal, ESC, backdrop click)
-- Debug defaults and console logs removed
 - Processing time restricted to valid enum values
-- Loading/disabled state during submission fetch
 - Inline error display via `#form-error`
-- Clear hidden payment field on toggle
+- Docker Compose, Dockerfile, render.yaml, seed.py for deployment/demo data
+
+### Explicitly Out of Scope (do not build without a new spec)
+
+- Copy sample / copy submission / edit submission UI
+- Email notifications (confirmation to customer, alert to lab staff) — `# TODO` markers exist in `app/main/routes.py`
+- Audit log UI — table exists, repository has `# TODO` markers for writes, but no routes/templates
+- "Reported" status (only `received` / `in_progress` / `complete` exist)
+
+### Lower Priority (still open)
+
+- **Delete sample button** — users currently cannot remove a sample row without refreshing the page
+- **Notes / special instructions** — free-text textarea per submission
+- **SRI hashes on CDN links** — compute at srihash.org
+- **"Copy last sample" button** — duplicate a row for high-throughput submissions
+- **Billing code / cost center field**
+- **File attachments** — COAs, SDSs, protocols
+- **Analysis descriptions in UI** — `long_description`/`short_description` exist but only as tooltips
+- **Self-host CDN dependencies**

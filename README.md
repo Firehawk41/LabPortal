@@ -1,148 +1,125 @@
-# FlaskTestingRequest — Lab Testing Request Form
+# FlaskTestingRequest — PRECILAB Lab Testing Request Portal
 
-A web application for submitting laboratory testing requests. Customers fill out a multi-section form to specify their company info, payment method, email distribution lists, and one or more sample analysis requests. On submission the data is saved server-side as JSON.
+A Flask web application for an ISO 17025 accredited analytical chemistry lab. Customers log in to submit multi-section laboratory testing requests (company info, payment, email distribution lists, and one or more samples with analysis selections). Lab staff use an admin dashboard to review submissions, update their status, and manage customer accounts.
 
 ---
 
-## Current State
-
-### Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3 / Flask |
-| Frontend | HTML5, vanilla JS |
-| UI helpers | jQuery 3.6.0, Select2 4.1.0, Tagify (CDN) |
-| Data storage | Flat JSON files (`submitted_request.json`) |
+| Backend | Python 3.11 / Flask (application factory + Blueprints) |
+| Database | PostgreSQL via SQLAlchemy ORM |
+| Auth | Flask-Login + Flask-Bcrypt |
+| Validation | marshmallow |
+| Frontend | HTML5, vanilla JS, jQuery, Select2, Tagify (CDN, unchanged) |
+| Production server | gunicorn |
 
-No database, no authentication, no requirements file. Dependencies are Flask (backend) and three CDN-loaded JS libraries.
-
-### File Structure
+## Architecture
 
 ```
-FlaskTestingRequest/
-├── app.py                      # Flask server — two routes
-├── templates/
-│   └── form.html               # Full multi-section form UI
-├── static/
-│   ├── js/
-│   │   └── script.js           # Client-side form logic
-│   └── data/
-│       └── analyses.json       # Catalog of available analyses
-├── submitted_request.json      # Latest submission (overwritten each time)
-└── submissions.txt             # Manual log of past raw submissions
+app/
+├── __init__.py        # create_app() factory
+├── extensions.py      # db, bcrypt, login_manager
+├── domain.py           # Pure dataclasses (Sample, TestingRequest) — no Flask/SQLAlchemy
+├── models.py            # SQLAlchemy models — User, Submission, Sample, AuditLog
+├── schemas.py            # marshmallow schemas — validate/deserialize JSON into domain objects
+├── repositories.py        # SubmissionRepository — translates domain objects <-> ORM models
+├── auth/                    # Login/logout blueprint
+├── main/                    # Customer-facing form + /submit blueprint
+├── admin/                   # Admin dashboard blueprint
+└── templates/               # Jinja2 templates (base, login, form, admin/*)
+static/                       # CSS, JS, analyses.json (unchanged)
+wsgi.py                       # WSGI entry point (`app = create_app()`)
+seed.py                       # Creates tables + demo data
 ```
 
-### Routes
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | Serves `form.html` |
-| POST | `/submit` | Accepts JSON body, writes to `submitted_request.json`, returns `{"message": "..."}` |
-
-### Form Sections
-
-1. **Customer Info** — company name, full address, contact name, phone
-2. **Email Distribution** — Results (main + CC) and Invoice (main + CC) lists, validated via Tagify with regex `^[^\s@]+@[^\s@]+\.[^\s@]+$`
-3. **Payment** — radio toggle between Purchase Order (PO number field) and Credit Card (card number field)
-4. **Samples** — dynamic rows, each containing:
-   - Sample ID
-   - Chemical Matrix (free text, e.g. "IPA")
-   - Sample Type (`chemical` | `water` | `wafer`)
-   - Analyses (multi-select via Select2, filtered from `analyses.json` by sample type)
-   - Processing Time (`Standard` | `Next Day` | `Rush`)
-
-A modal shows a JSON preview before final submission.
-
-### Analysis Catalog (`analyses.json`)
-
-Seven groups with a total of ~43 options:
-
-| Group | # Options | Notable sample-type restrictions |
-|---|---|---|
-| Metals | 12 | all types |
-| Anions | 10 | all types |
-| Cations | 3 | all types |
-| Organics | 4 | all types |
-| Physical Properties | 11 | all types |
-| Microbiology | 1 | water only |
-| Assay | 2 | all types |
-
-Each entry has `id`, `label`, `short_description`, `long_description`, and `sample_types`.
-
-### Submitted JSON Shape
-
-```json
-{
-  "customer_name": "Acme Corp",
-  "street_address": "123 Main St",
-  "city": "Springfield",
-  "state": "IL",
-  "country": "USA",
-  "customer_contact": "Jane Doe",
-  "customer_phone": "555-1234",
-  "results_list": "[{\"value\":\"jane@acme.com\"}]",
-  "results_cc_list": "",
-  "payment_method": "po",
-  "po_number": "PO-9876",
-  "cc_number": "",
-  "invoice_list": "[{\"value\":\"ap@acme.com\"}]",
-  "invoice_cc_list": "",
-  "samples": [
-    {
-      "sample_id": "S-001",
-      "chemical_matrix": "IPA",
-      "sample_type": "chemical",
-      "processing_time": "Next Day",
-      "analyses": ["36_elements_icpms", "toc"]
-    }
-  ]
-}
-```
-
-Note: `results_list` and `invoice_list` are stored as raw Tagify JSON strings, not parsed arrays.
+Routes never touch the ORM directly for submissions — they call `SubmissionRepository`, which translates between the pure `TestingRequest`/`Sample` dataclasses in `domain.py` and the SQLAlchemy models in `models.py`.
 
 ---
 
-## How to Run
+## Setup
+
+### Option 1: Docker Compose (recommended for local dev)
+
+Requires Docker and Docker Compose.
 
 ```bash
-pip install flask
-python app.py
-# Visit http://localhost:5000
+cp .env.example .env
+# edit .env and set FLASK_SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+docker compose up --build
 ```
 
-Runs in Flask debug mode on `0.0.0.0:5000`.
+This starts a `web` service (the Flask app via gunicorn) and a `db` service (PostgreSQL 15) with a named volume for persistence. The app is available at `http://localhost:5000`.
+
+To create the database tables and load demo data:
+
+```bash
+docker compose exec web python seed.py
+```
+
+### Option 2: Manual local dev (no Docker)
+
+Requires Python 3.11 and a running PostgreSQL server.
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Create a database and user matching your DATABASE_URL, e.g.:
+#   createuser postgres
+#   createdb flasktestingrequest
+
+cp .env.example .env
+# edit .env: set FLASK_SECRET_KEY, DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+
+python seed.py        # creates tables + demo data
+python wsgi.py        # http://127.0.0.1:5000
+```
+
+### Option 3: Deploy to Render
+
+This repo includes a `render.yaml` blueprint that provisions a web service and a managed PostgreSQL database.
+
+1. Push this repository to GitHub.
+2. In Render, create a new **Blueprint** from the repository — Render will read `render.yaml` and provision both the web service and the database automatically.
+3. Set the `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables on the web service (marked `sync: false` in `render.yaml`, so Render will prompt for them).
+4. After the first deploy, open a shell on the web service (or use Render's one-off job feature) and run:
+   ```bash
+   python seed.py
+   ```
+   to create tables and load demo data.
+5. Visit the deployed URL and log in with the admin credentials you set.
+
+`FLASK_SECRET_KEY` and `DATABASE_URL` are populated automatically by Render (`generateValue` and `fromDatabase` respectively).
 
 ---
 
-## Known Gaps / Planning Notes
+## Seeding Demo Data
 
-These are areas that are incomplete or missing — useful context for planning the next phase:
+`seed.py`:
 
-- **No `requirements.txt`** — dependencies are undocumented.
-- **No database** — every submission overwrites `submitted_request.json`; `submissions.txt` is a manual scratch file.
-- **No authentication** — the form and submit endpoint are fully public.
-- **No server-side validation** — `/submit` writes whatever JSON it receives with no schema check.
-- **Tagify email lists stored as raw strings** — the backend receives them as unparsed Tagify JSON; they need to be decoded before use.
-- **No email/notification sending** — submission is saved to disk only; no confirmation email to customer or lab staff.
-- **No admin/review UI** — no way to view, search, or manage past submissions from the browser.
-- **No unique submission IDs** — requests cannot be referenced or tracked.
-- **No file/attachment support** — customers cannot attach COAs, SDSs, or other documents.
-- **CDN dependencies** — jQuery, Select2, Tagify are loaded from external CDNs; offline use fails.
-- **`processing_time` not in `analyses.json`** — it is a free-form field per sample, not validated against a fixed set of options (though the UI restricts it to Standard/Next Day/Rush).
+- Creates all database tables (`users`, `submissions`, `samples`, `audit_log`).
+- Creates one **admin** account from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (prints a warning if these env vars are unset and falls back to `admin@example.com` / `changeme` — change these immediately in any shared environment).
+- Creates three **customer** accounts for realistic analytical-chemistry companies (Apex Analytics Inc., Silver Creek Materials, Northwind Semiconductor).
+- Creates five sample **submissions** across the customer accounts with varied statuses (`received`, `in_progress`, `complete`), each with one to three samples drawn from realistic chemical matrices (IPA, DI Water, Silicon Wafer, HCl, NaOH) and analyses from `static/data/analyses.json`.
+
+Re-running `seed.py` is safe — it skips users/submissions that already exist.
 
 ---
 
-## Potential Next Steps (for planning discussion)
+## Roles & Routes
 
-- Add `requirements.txt` (Flask, and optionally SQLAlchemy, Flask-WTF, etc.)
-- Replace flat-file storage with a proper database (SQLite for simple, PostgreSQL for production)
-- Add server-side validation / schema enforcement on `/submit`
-- Parse Tagify email strings server-side into proper lists
-- Generate a unique submission ID (UUID) per request and return it to the client
-- Add a confirmation email to the customer and a notification to lab staff
-- Build a read-only admin page to list and view past submissions
-- Add authentication (at minimum HTTP Basic Auth or a simple login for the admin view)
-- Bundle JS dependencies locally instead of relying on CDNs
-- Add a `requirements.txt` and a `Makefile` or `run.sh` for easier local setup
+| Role | Access |
+|---|---|
+| `customer` | `/` (testing request form), `/submit` |
+| `admin` | Everything a customer can access, plus `/admin/submissions`, `/admin/submissions/<id>`, `/admin/users` |
+
+There is no public self-registration — admins create customer accounts via `/admin/users/create`.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

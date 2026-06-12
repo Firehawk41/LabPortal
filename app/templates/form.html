@@ -37,6 +37,10 @@
         <a href="/" class="is-active" aria-current="page">Request Testing</a>
         <a href="/">About</a>
         <a href="/">Contact</a>
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+          <a href="{{ url_for('admin.submissions') }}">Admin</a>
+        {% endif %}
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
       </nav>
     </div>
   </header>

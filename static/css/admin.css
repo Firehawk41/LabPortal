@@ -1,0 +1,141 @@
+/* PRECILAB admin theme — dark variant of the corporate palette.
+   Applied via the .admin-theme class on <body>; overrides the CSS
+   custom properties defined in style.css so shared components
+   (header, footer, buttons, form rows) automatically restyle. */
+
+.admin-theme {
+  --color-primary: #4C8BF5;
+  --color-primary-dark: #3A6FD0;
+  --color-text: #E6E9EF;
+  --color-text-muted: #9AA5B1;
+  --color-border: #34404F;
+  --color-bg: #1B2430;
+  --color-section-bg: #232E3D;
+}
+
+.admin-theme .site-footer {
+  color: #E6E9EF;
+}
+
+/* ---------- Tables ---------- */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-section-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.6em 0.9em;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9em;
+}
+
+.data-table th {
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75em;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table a {
+  color: var(--color-primary);
+}
+
+/* ---------- Status badges ---------- */
+
+.status-badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  border-radius: 3px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: capitalize;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.status-badge--received {
+  border-color: #6C8EBF;
+  color: #9DB7E8;
+}
+
+.status-badge--in_progress {
+  border-color: #C9A227;
+  color: #E8C84A;
+}
+
+.status-badge--complete {
+  border-color: #4F9F6E;
+  color: #7FD89B;
+}
+
+/* ---------- Status update form ---------- */
+
+.status-form {
+  display: inline-flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.status-form select {
+  width: auto;
+  max-width: none;
+}
+
+/* ---------- Pagination ---------- */
+
+.pagination {
+  display: flex;
+  gap: 0.5em;
+  justify-content: center;
+  margin-top: 1.5em;
+}
+
+.pagination a,
+.pagination span {
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 0.9em;
+}
+
+.pagination a:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.pagination span.is-current {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+}
+
+/* ---------- Detail key/value layout ---------- */
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0.5em 1em;
+  margin-bottom: 1.5em;
+}
+
+.detail-grid dt {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.detail-grid dd {
+  margin: 0;
+}

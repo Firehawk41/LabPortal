@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Login — PRECILAB{% endblock %}
+
+{% block nav %}
+  <a href="{{ url_for('auth.login') }}" class="is-active" aria-current="page">Login</a>
+{% endblock %}
+
+{% block content %}
+  <h1>Sign In</h1>
+
+  <section class="form-section">
+    {% if error %}
+      <div class="form-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('auth.login') }}">
+      <div class="form-row">
+        <label for="email">Email:</label>
+        <input type="email" name="email" id="email" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="password">Password:</label>
+        <input type="password" name="password" id="password" required>
+      </div>
+      <button type="submit" class="btn btn--primary">Log In</button>
+    </form>
+  </section>
+{% endblock %}

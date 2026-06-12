@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PRECILAB{% endblock %}</title>
+
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a href="{{ url_for('main.index') }}" class="site-header__brand">PRECILAB</a>
+      <nav class="site-header__nav" aria-label="Main navigation">
+        {% block nav %}
+          {% if current_user.is_authenticated %}
+            {% if current_user.role == 'admin' %}
+              <a href="{{ url_for('admin.submissions') }}">Admin</a>
+            {% endif %}
+            <a href="{{ url_for('main.index') }}">Request Testing</a>
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
+          {% else %}
+            <a href="{{ url_for('auth.login') }}">Login</a>
+          {% endif %}
+        {% endblock %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__links">
+      <div class="site-footer__col">
+        <h3>Company</h3>
+        <a href="/">About Us</a>
+        <a href="/">Careers</a>
+        <a href="/">News</a>
+      </div>
+      <div class="site-footer__col">
+        <h3>Services</h3>
+        <a href="/">Testing Capabilities</a>
+        <a href="/">Sample Requirements</a>
+        <a href="/">Turnaround Times</a>
+      </div>
+      <div class="site-footer__col">
+        <h3>Support</h3>
+        <a href="{{ url_for('main.index') }}">Request Testing</a>
+        <a href="/">FAQs</a>
+        <a href="/">Contact Us</a>
+      </div>
+    </div>
+    <div class="site-footer__contact">
+      <p>123 Industrial Parkway, Springfield, IL 62704</p>
+      <p>Phone: (555) 123-4567</p>
+      <p>&copy; PRECILAB. All rights reserved.</p>
+    </div>
+  </footer>
+</body>
+</html>
