@@ -15,7 +15,7 @@ function showFormError(message) {
 }
 
 // Adds a new row of sample fields to the form.
-async function addSample() {
+async function addSample(initialSampleType) {
   const sampleContainer = document.getElementById("samples");
   const index = sampleCounter++;
 
@@ -45,6 +45,9 @@ async function addSample() {
     option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
     sampleTypeSelect.appendChild(option);
   });
+  if (initialSampleType && types.includes(initialSampleType)) {
+    sampleTypeSelect.value = initialSampleType;
+  }
 
   // Processing time dropdown
   const processingTime = document.createElement("select");
@@ -60,11 +63,27 @@ async function addSample() {
   // Analysis dropdown (async, filtered by sample type)
   let analysisSelect = await createAnalysisDropdown(index, sampleTypeSelect.value);
 
+  // Copy button — duplicates this row into a new row
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "btn btn--secondary btn--icon";
+  copyBtn.textContent = "⧉";
+  copyBtn.title = "Copy this sample";
+
+  // Remove button — deletes this row
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn btn--secondary btn--icon";
+  removeBtn.textContent = "🗑";
+  removeBtn.title = "Remove this sample";
+
   row.appendChild(sampleId);
   row.appendChild(matrix);
   row.appendChild(sampleTypeSelect);
   row.appendChild(analysisSelect);
   row.appendChild(processingTime);
+  row.appendChild(copyBtn);
+  row.appendChild(removeBtn);
 
   // Update analysis dropdown when sample type changes
   sampleTypeSelect.addEventListener("change", async function () {
@@ -77,11 +96,44 @@ async function addSample() {
     analysisSelect = newAnalysisSelect;
   });
 
+  removeBtn.addEventListener("click", function () {
+    if (typeof $ !== "undefined" && analysisSelect) {
+      $(analysisSelect).select2("destroy");
+    }
+    row.remove();
+  });
+
+  copyBtn.addEventListener("click", async function () {
+    const newRow = await addSample(sampleTypeSelect.value);
+
+    const newSampleId = newRow.querySelector('input[name="sample_id[]"]');
+    if (newSampleId) newSampleId.value = sampleId.value;
+
+    const newMatrix = newRow.querySelector('input[name="chemical_matrix[]"]');
+    if (newMatrix) newMatrix.value = matrix.value;
+
+    const newProcessingTime = newRow.querySelector('select[name="processing_time[]"]');
+    if (newProcessingTime) newProcessingTime.value = processingTime.value;
+
+    const selectedValues = Array.from(analysisSelect.querySelectorAll("option:checked")).map(opt => opt.value);
+    const newAnalysisSelect = newRow.querySelector(".analysis-select");
+    if (newAnalysisSelect && selectedValues.length > 0) {
+      Array.from(newAnalysisSelect.options).forEach(opt => {
+        opt.selected = selectedValues.includes(opt.value);
+      });
+      if (typeof $ !== "undefined") {
+        $(newAnalysisSelect).trigger("change");
+      }
+    }
+  });
+
   sampleContainer.appendChild(row);
 
   if (typeof $ !== "undefined") {
     $(analysisSelect).select2({ placeholder: "Select analyses", width: "100%", allowClear: true });
   }
+
+  return row;
 }
 
 function filterAnalysesByType(data, sampleType) {
@@ -137,7 +189,7 @@ async function createAnalysisDropdown(index, sampleType) {
 
 // Create the first sample row on page load and wire up the add button
 document.addEventListener("DOMContentLoaded", async function () {
-  document.getElementById("addSampleBtn").addEventListener("click", addSample);
+  document.getElementById("addSampleBtn").addEventListener("click", () => addSample());
   await addSample();
 });
 
@@ -211,12 +263,11 @@ document.getElementById("sampleForm").addEventListener("submit", function (e) {
   const types     = formData.getAll("sample_type[]");
   const times     = formData.getAll("processing_time[]");
 
-  const analyses = [];
-  let i = 0;
-  while (formData.has(`analysis[${i}][]`)) {
-    analyses.push(formData.getAll(`analysis[${i}][]`));
-    i++;
-  }
+  const sampleRows = document.querySelectorAll("#samples .sample-row");
+  const analyses = Array.from(sampleRows).map(row => {
+    const select = row.querySelector(".analysis-select");
+    return select ? Array.from(select.selectedOptions).map(opt => opt.value) : [];
+  });
 
   const samples = sampleIds.map((id, idx) => ({
     sample_id: id,
