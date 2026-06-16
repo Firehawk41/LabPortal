@@ -61,4 +61,7 @@ def create_app():
         )
         return response
 
+    from seed import seed_if_empty
+    seed_if_empty(app)
+
     return app
