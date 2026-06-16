@@ -168,6 +168,7 @@ def seed_if_empty(app):
     """Auto-seed the database if no users exist. Safe to call at startup — never raises."""
     with app.app_context():
         try:
+            db.create_all()
             from app.models import User as _User  # noqa: avoid circular at module level
             if _User.query.count() == 0:
                 print("No users found — running auto-seed.")
