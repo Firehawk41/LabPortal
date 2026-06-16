@@ -20,7 +20,7 @@ def create_app():
 
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key-change-me")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/flasktestingrequest"
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/labportal"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # auto-413 on oversized bodies

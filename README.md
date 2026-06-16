@@ -1,4 +1,4 @@
-# FlaskTestingRequest — Lab Testing Request Portal
+# LabPortal — Lab Testing Request Portal
 
 A Flask web application for an ISO 17025 accredited analytical chemistry lab. Customers log in to submit multi-section laboratory testing requests (company info, payment, email distribution lists, and one or more samples with analysis selections). Lab staff use an admin dashboard to review submissions, update their status, and manage customer accounts.
 
@@ -69,7 +69,7 @@ pip install -r requirements.txt
 
 # Create a database and user matching your DATABASE_URL, e.g.:
 #   createuser postgres
-#   createdb flasktestingrequest
+#   createdb labportal
 
 cp .env.example .env
 # edit .env: set FLASK_SECRET_KEY, DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
