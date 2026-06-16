@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}PRECILAB{% endblock %}</title>
+  <title>{% block title %}YourLab{% endblock %}</title>
 
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
   {% block extra_head %}{% endblock %}
@@ -11,7 +11,7 @@
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header">
     <div class="site-header__inner">
-      <a href="{{ url_for('main.index') }}" class="site-header__brand">PRECILAB</a>
+      <a href="{{ url_for('main.index') }}" class="site-header__brand">YourLab</a>
       <nav class="site-header__nav" aria-label="Main navigation">
         {% block nav %}
           {% if current_user.is_authenticated %}
@@ -56,7 +56,7 @@
     <div class="site-footer__contact">
       <p>123 Industrial Parkway, Springfield, IL 62704</p>
       <p>Phone: (555) 123-4567</p>
-      <p>&copy; PRECILAB. All rights reserved.</p>
+      <p>&copy; YourLab. All rights reserved.</p>
     </div>
   </footer>
 </body>

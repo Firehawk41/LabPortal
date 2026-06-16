@@ -1,4 +1,4 @@
-/* PRECILAB corporate theme
+/* YourLab theme
    Palette: steel blue primary (#2B5B8E), white background, dark gray body text
    Flat, professional B2B aesthetic — no gradients, no shadows, no decoration */
 
@@ -200,6 +200,13 @@ input[type="radio"] {
   width: auto;
   flex: 1 1 160px;
   max-width: none;
+}
+
+.sample-row .btn--icon {
+  flex: 0 0 auto;
+  padding: 0.4em 0.6em;
+  line-height: 1;
+  font-size: 1.1em;
 }
 
 /* ---------- Error / alert ---------- */
