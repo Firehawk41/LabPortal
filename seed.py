@@ -91,7 +91,7 @@ def main():
                 email=admin_email,
                 password_hash=bcrypt.generate_password_hash(admin_password).decode("utf-8"),
                 role="admin",
-                company_name="LabPortal",
+                company_name="YourLab",
             )
             db.session.add(admin)
             print(f"Created admin user: {admin_email}")

@@ -1,4 +1,4 @@
-# LabPortal Testing Request Portal — Claude Context
+# YourLab Testing Request Portal — Claude Context
 
 ## What This Is
 
