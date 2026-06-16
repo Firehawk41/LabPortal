@@ -1,8 +1,8 @@
-# PRECILAB Testing Request Portal — Claude Context
+# LabPortal Testing Request Portal — Claude Context
 
 ## What This Is
 
-A Flask web app for an ISO 17025 accredited analytical chemistry lab. Authenticated customers fill out a multi-section testing request form (company info, payment, email distribution lists, sample details); lab staff (admins) review submissions and update their status from a dashboard. Internal project name: PRECILAB.
+A Flask web app for an ISO 17025 accredited analytical chemistry lab. Authenticated customers fill out a multi-section testing request form (company info, payment, email distribution lists, sample details); lab staff (admins) review submissions and update their status from a dashboard.
 
 ## How to Run
 
