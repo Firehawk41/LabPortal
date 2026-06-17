@@ -54,7 +54,7 @@
 
       <div class="form-row">
         <label for="customer-name">Company:</label>
-        <input name="customer-name" id="customer-name" placeholder="Company" required>
+        <input name="customer-name" id="customer-name" required>
       </div>
       <div class="form-row">
         <label for="street-address">Street Address:</label>
@@ -70,7 +70,7 @@
       </div>
       <div class="form-row">
         <label for="country">Country:</label>
-        <input name="country" id="country" placeholder="USA" required>
+        <input name="country" id="country" required>
       </div>
 
       <div class="form-row">
@@ -106,10 +106,9 @@
         <input name="po-number" id="po-number" placeholder="Enter PO number">
       </div>
 
-      <!-- CC info input -->
+      <!-- CC info message -->
       <div class="form-row hidden" id="cc-info">
-        <label for="cc-number">Credit Card (Last 4 digits &amp; name):</label>
-        <input name="cc-number" id="cc-number" placeholder="1234 John Doe">
+        <p class="cc-notice">A link for credit card payment will be sent with the invoice.</p>
       </div>
 
       <div class="form-row">

@@ -215,13 +215,11 @@ document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
       poInfo.classList.remove("hidden");
       ccInfo.classList.add("hidden");
       document.getElementById("po-number").required = true;
-      document.getElementById("cc-number").required = false;
-      document.getElementById("cc-number").value = "";
+      document.getElementById("po-number").value = "";
     } else {
       poInfo.classList.add("hidden");
       ccInfo.classList.remove("hidden");
       document.getElementById("po-number").required = false;
-      document.getElementById("cc-number").required = true;
       document.getElementById("po-number").value = "";
     }
   });
@@ -289,7 +287,6 @@ document.getElementById("sampleForm").addEventListener("submit", function (e) {
     results_cc_list:  formData.get("results-cc-list"),
     payment_method:   formData.get("payment_method"),
     po_number:        formData.get("po-number"),
-    cc_number:        formData.get("cc-number"),
     invoice_list:     formData.get("invoice-list"),
     invoice_cc_list:  formData.get("invoice-cc-list"),
     samples:          samples
