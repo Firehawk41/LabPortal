@@ -139,6 +139,33 @@ textarea:focus {
   border-color: var(--color-primary);
 }
 
+/* ---------- Third-party widget overrides ---------- */
+
+/* Tagify: make the tag container match plain inputs */
+.tagify {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+  border-radius: 3px;
+  max-width: 420px;
+}
+
+.tagify:focus-within {
+  border-color: var(--color-primary);
+}
+
+/* Select2: make the selection box match plain inputs */
+.select2-container .select2-selection--multiple,
+.select2-container .select2-selection--single {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+  border-radius: 3px;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--multiple,
+.select2-container--default.select2-container--open .select2-selection--single {
+  border-color: var(--color-primary);
+}
+
 input[type="radio"] {
   margin-right: 0.4em;
 }
