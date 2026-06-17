@@ -6,3 +6,5 @@ __pycache__/
 .env
 instance/
 postgres-data/
+node_modules/
+screenshots/
