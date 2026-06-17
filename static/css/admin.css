@@ -185,3 +185,53 @@
 .detail-grid dd {
   margin: 0;
 }
+
+/* ---------- Third-party widget — dark overrides ---------- */
+
+/* Tagify: override its own CSS variable scope so tag chips are readable */
+.admin-theme .tagify {
+  --tag-bg: #1E3A5F;
+  --tag-hover: #24487A;
+  --tag-text-color: #E6E9EF;
+  --tag-remove-btn-color: #9AA5B1;
+  --tag-remove-btn-bg--hover: rgba(192, 57, 43, 0.6);
+  --tag-invalid-color: rgba(255, 100, 100, 0.4);
+  --tag-border-color: #34404F;
+}
+
+/* Select2: chips (selected items in multiple-select) */
+.admin-theme .select2-selection__choice {
+  background-color: #1E3A5F !important;
+  color: #E6E9EF !important;
+  border-color: #34404F !important;
+}
+
+.admin-theme .select2-selection__choice__remove {
+  color: #9AA5B1 !important;
+}
+
+.admin-theme .select2-selection__choice__remove:hover {
+  color: #E6E9EF !important;
+}
+
+/* Select2: dropdown panel */
+.admin-theme .select2-dropdown {
+  background-color: #232E3D;
+  border-color: #34404F;
+  color: #E6E9EF;
+}
+
+.admin-theme .select2-results__option {
+  color: #E6E9EF;
+}
+
+.admin-theme .select2-results__option--highlighted {
+  background-color: #1E3A5F !important;
+  color: #E6E9EF !important;
+}
+
+.admin-theme .select2-search--dropdown .select2-search__field {
+  background: #1B2430;
+  border-color: #34404F;
+  color: #E6E9EF;
+}
