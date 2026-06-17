@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from flask import abort, jsonify, redirect, render_template, request, url_for
@@ -137,3 +138,30 @@ def create_user():
     db.session.commit()
 
     return redirect(url_for("admin.users"))
+
+
+@admin_bp.route("/api/customer/<user_id>/profile")
+@admin_required
+def customer_profile_api(user_id):
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        abort(404)
+    user = User.query.get(uid)
+    if user is None or user.role != "customer":
+        abort(404)
+    return jsonify({
+        "customer_name":    user.company_name or "",
+        "street_address":   user.street_address or "",
+        "city":             user.city or "",
+        "state":            user.state or "",
+        "country":          user.country or "",
+        "customer_contact": user.customer_contact or "",
+        "customer_phone":   user.customer_phone or "",
+        "results_list":     list(user.results_list or []),
+        "results_cc_list":  list(user.results_cc_list or []),
+        "invoice_list":     list(user.invoice_list or []),
+        "invoice_cc_list":  list(user.invoice_cc_list or []),
+        "payment_method":   user.payment_method or "po",
+        "po_number":        user.po_number or "",
+    })

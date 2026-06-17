@@ -1,5 +1,6 @@
 let sampleCounter = 0;
 let pendingFormData = null;
+const tagifyMap = {};
 
 function showFormError(message) {
   const el = document.getElementById("form-error");
@@ -208,7 +209,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const input = document.getElementById(inputId);
     if (!input) return;
     const profileEmails = (typeof PROFILE !== "undefined" && PROFILE[profileKey]) || [];
-    new Tagify(input, {
+    tagifyMap[inputId] = new Tagify(input, {
       pattern: /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/,
       duplicates: false,
       dropdown: { enabled: 0 },
@@ -217,10 +218,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// Pre-fill plain Customer Information inputs from saved profile
-document.addEventListener("DOMContentLoaded", function () {
-  if (typeof PROFILE === "undefined") return;
-
+function populateFromProfile(profile) {
   const fieldMap = {
     "customer-name":    "customer_name",
     "street-address":   "street_address",
@@ -230,25 +228,58 @@ document.addEventListener("DOMContentLoaded", function () {
     "customer-contact": "customer_contact",
     "customer-phone":   "customer_phone",
   };
-
   Object.entries(fieldMap).forEach(([inputId, profileKey]) => {
     const el = document.getElementById(inputId);
-    if (el && PROFILE[profileKey]) el.value = PROFILE[profileKey];
+    if (el) el.value = profile[profileKey] || "";
   });
 
-  // Set payment method radio (default is "po", only need to change if "cc")
-  if (PROFILE.payment_method) {
-    const radio = document.querySelector(`input[name="payment_method"][value="${PROFILE.payment_method}"]`);
-    if (radio && !radio.checked) {
-      radio.checked = true;
-      radio.dispatchEvent(new Event("change"));
-    }
+  const emailMap = {
+    "results-list":    "results_list",
+    "results-cc-list": "results_cc_list",
+    "invoice-list":    "invoice_list",
+    "invoice-cc-list": "invoice_cc_list",
+  };
+  Object.entries(emailMap).forEach(([inputId, profileKey]) => {
+    const t = tagifyMap[inputId];
+    if (!t) return;
+    t.removeAllTags();
+    const emails = profile[profileKey];
+    if (emails && emails.length) t.addTags(emails.map(e => ({ value: e })));
+  });
+
+  const method = profile.payment_method || "po";
+  const radio = document.querySelector(`input[name="payment_method"][value="${method}"]`);
+  if (radio && !radio.checked) {
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+  }
+  if (profile.po_number) {
+    const poInput = document.getElementById("po-number");
+    if (poInput) poInput.value = profile.po_number;
+  }
+}
+
+// Pre-fill plain Customer Information inputs from saved profile
+document.addEventListener("DOMContentLoaded", function () {
+  if (typeof PROFILE !== "undefined" && Object.keys(PROFILE).length) {
+    populateFromProfile(PROFILE);
   }
 
-  // Pre-fill po-number after the change event (which clears it)
-  if (PROFILE.po_number) {
-    const poInput = document.getElementById("po-number");
-    if (poInput) poInput.value = PROFILE.po_number;
+  // Admin: populate form when a customer is selected from the dropdown
+  const behalfSelect = document.getElementById("behalf-customer");
+  if (behalfSelect) {
+    behalfSelect.addEventListener("change", async function () {
+      const customerId = this.value;
+      const hiddenInput = document.getElementById("behalf-customer-id");
+      if (hiddenInput) hiddenInput.value = customerId;
+      if (!customerId) return;
+      try {
+        const res = await fetch(`/admin/api/customer/${customerId}/profile`);
+        if (res.ok) populateFromProfile(await res.json());
+      } catch (err) {
+        console.error("Failed to load customer profile:", err);
+      }
+    });
   }
 });
 
@@ -323,20 +354,21 @@ document.getElementById("sampleForm").addEventListener("submit", function (e) {
   }));
 
   pendingFormData = {
-    customer_name:    formData.get("customer-name"),
-    street_address:   formData.get("street-address"),
-    city:             formData.get("city"),
-    state:            formData.get("state"),
-    country:          formData.get("country"),
-    customer_contact: formData.get("customer-contact"),
-    customer_phone:   formData.get("customer-phone"),
-    results_list:     formData.get("results-list"),
-    results_cc_list:  formData.get("results-cc-list"),
-    payment_method:   formData.get("payment_method"),
-    po_number:        formData.get("po-number"),
-    invoice_list:     formData.get("invoice-list"),
-    invoice_cc_list:  formData.get("invoice-cc-list"),
-    samples:          samples
+    customer_name:       formData.get("customer-name"),
+    street_address:      formData.get("street-address"),
+    city:                formData.get("city"),
+    state:               formData.get("state"),
+    country:             formData.get("country"),
+    customer_contact:    formData.get("customer-contact"),
+    customer_phone:      formData.get("customer-phone"),
+    results_list:        formData.get("results-list"),
+    results_cc_list:     formData.get("results-cc-list"),
+    payment_method:      formData.get("payment_method"),
+    po_number:           formData.get("po-number"),
+    invoice_list:        formData.get("invoice-list"),
+    invoice_cc_list:     formData.get("invoice-cc-list"),
+    behalf_customer_id:  document.getElementById("behalf-customer-id")?.value || "",
+    samples:             samples
   };
 
   document.getElementById("jsonSummary").textContent = JSON.stringify(pendingFormData, null, 2);

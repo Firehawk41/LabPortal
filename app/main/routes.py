@@ -1,11 +1,14 @@
 import re
+import uuid
 
 from flask import jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from marshmallow import ValidationError
 
+from app.auth.decorators import admin_required
 from app.extensions import db
 from app.main import main_bp
+from app.models import AuditLog, User
 from app.repositories import SubmissionRepository
 from app.schemas import EMAIL_RE, SubmissionSchema
 
@@ -41,7 +44,16 @@ def _parse_email_list(raw):
 def index():
     if not current_user.is_authenticated:
         return redirect(url_for("auth.login"))
-    return render_template("form.html", profile=_build_profile())
+    if current_user.role == "admin":
+        return redirect(url_for("admin.submissions"))
+    return render_template("form.html", profile=_build_profile(), customers=None)
+
+
+@main_bp.route("/new-submission")
+@admin_required
+def new_submission():
+    customers = User.query.filter_by(role="customer").order_by(User.company_name).all()
+    return render_template("form.html", profile={}, customers=customers)
 
 
 @main_bp.route("/submit", methods=["POST"])
@@ -60,9 +72,30 @@ def submit():
     except ValidationError as err:
         return jsonify({"errors": err.messages}), 400
 
-    testing_request.user_id = current_user.id
+    if current_user.role == "admin":
+        behalf_id = data.get("behalf_customer_id", "").strip()
+        customer = User.query.filter_by(role="customer").filter(
+            User.id == behalf_id
+        ).first() if behalf_id else None
+        if not customer:
+            return jsonify({"error": "A valid customer must be selected."}), 400
+        testing_request.user_id = customer.id
+    else:
+        testing_request.user_id = current_user.id
+        customer = None
 
     submission_id = submission_repo.save(testing_request)
+
+    if customer is not None:
+        log = AuditLog(
+            submission_id=uuid.UUID(submission_id),
+            changed_by=current_user.id,
+            field_name="submitted_by_admin",
+            old_value=None,
+            new_value=str(customer.id),
+        )
+        db.session.add(log)
+        db.session.commit()
 
     # TODO: send confirmation email to customer and notification to lab staff
 

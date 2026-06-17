@@ -11,12 +11,15 @@
 {% block nav %}
   <a href="{{ url_for('admin.submissions') }}" class="is-active" aria-current="page">Submissions</a>
   <a href="{{ url_for('admin.users') }}">Users</a>
-  <a href="{{ url_for('main.index') }}">Request Testing</a>
+  <a href="{{ url_for('main.new_submission') }}">New Submission</a>
   <a href="{{ url_for('auth.logout') }}">Logout</a>
 {% endblock %}
 
 {% block content %}
-  <h1>Submissions</h1>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+    <h1 style="margin:0;">Submissions</h1>
+    <a href="{{ url_for('main.new_submission') }}" class="btn btn--primary">+ New Submission</a>
+  </div>
 
   <form method="get" action="{{ url_for('admin.submissions') }}" class="filter-bar">
     <div class="filter-bar__field">

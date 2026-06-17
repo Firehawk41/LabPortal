@@ -6,6 +6,9 @@
   <title>YourLab Testing Request Form</title>
 
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
+  {% if current_user.is_authenticated and current_user.role == 'admin' %}
+  <link href="{{ url_for('static', filename='css/admin.css') }}" rel="stylesheet" />
+  {% endif %}
 
   <!-- Select2 4.0.13 (stable — not RC) -->
   <!-- TODO: add integrity="sha384-..." crossorigin="anonymous" after verifying at https://www.srihash.org/ -->
@@ -30,7 +33,7 @@
   <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 
 </head>
-<body>
+<body class="{% if current_user.is_authenticated and current_user.role == 'admin' %}admin-theme{% endif %}">
   <header class="site-header">
     <div class="site-header__inner">
       <a href="/" class="site-header__brand">YourLab</a>
@@ -56,6 +59,22 @@
   <h1>Testing Request Form</h1>
 
   <form id="sampleForm">
+    {% if customers %}
+    <fieldset class="form-section" id="admin-customer-section">
+      <legend>Submit on Behalf Of</legend>
+      <div class="form-row">
+        <label for="behalf-customer">Customer account:</label>
+        <select id="behalf-customer">
+          <option value="">— select a customer —</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.company_name or c.email }} ({{ c.email }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <input type="hidden" id="behalf-customer-id" value="">
+    </fieldset>
+    {% endif %}
+
     <fieldset class="form-section">
       <legend>Customer Information</legend>
 
