@@ -258,6 +258,30 @@ input[type="radio"] {
   font-size: 1.1em;
 }
 
+/* ---------- Profile page ---------- */
+
+.profile-email {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+  margin-bottom: 1.5em;
+}
+
+.profile-saved {
+  background: #EAF5EA;
+  border: 1px solid #5DA75D;
+  border-radius: 3px;
+  padding: 0.75em 1em;
+  margin-bottom: 1.25em;
+  font-size: 0.9em;
+}
+
+.field-error {
+  display: block;
+  color: #C0392B;
+  font-size: 0.85em;
+  margin-top: 0.25em;
+}
+
 /* ---------- Credit card notice ---------- */
 
 .cc-notice {

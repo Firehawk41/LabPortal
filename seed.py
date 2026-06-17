@@ -25,6 +25,12 @@ CUSTOMERS = [
         "city": "Austin",
         "state": "TX",
         "country": "USA",
+        "results_list": ["labmanager@apexanalytics.com"],
+        "results_cc_list": [],
+        "invoice_list": ["billing@apexanalytics.com"],
+        "invoice_cc_list": [],
+        "payment_method": "po",
+        "po_number": "PO-1000",
     },
     {
         "email": "procurement@silvercreekmaterials.com",
@@ -37,6 +43,12 @@ CUSTOMERS = [
         "city": "Pittsburgh",
         "state": "PA",
         "country": "USA",
+        "results_list": ["procurement@silvercreekmaterials.com"],
+        "results_cc_list": [],
+        "invoice_list": ["billing@silvercreekmaterials.com"],
+        "invoice_cc_list": [],
+        "payment_method": "po",
+        "po_number": "PO-2000",
     },
     {
         "email": "qa@northwindsemiconductor.com",
@@ -49,6 +61,12 @@ CUSTOMERS = [
         "city": "Chandler",
         "state": "AZ",
         "country": "USA",
+        "results_list": ["qa@northwindsemiconductor.com"],
+        "results_cc_list": [],
+        "invoice_list": ["billing@northwindsemiconductor.com"],
+        "invoice_cc_list": [],
+        "payment_method": "cc",
+        "po_number": "",
     },
 ]
 
@@ -107,6 +125,18 @@ def _seed_data():
             password_hash=bcrypt.generate_password_hash(customer["password"]).decode("utf-8"),
             role="customer",
             company_name=customer["company_name"],
+            street_address=customer["street_address"],
+            city=customer["city"],
+            state=customer["state"],
+            country=customer["country"],
+            customer_contact=customer["customer_contact"],
+            customer_phone=customer["customer_phone"],
+            results_list=customer.get("results_list", []),
+            results_cc_list=customer.get("results_cc_list", []),
+            invoice_list=customer.get("invoice_list", []),
+            invoice_cc_list=customer.get("invoice_cc_list", []),
+            payment_method=customer.get("payment_method", "po"),
+            po_number=customer.get("po_number", ""),
         )
         db.session.add(user)
         customer_users.append(user)
@@ -164,11 +194,36 @@ def _seed_data():
     print("Seeding complete.")
 
 
+def _add_missing_columns():
+    """Add new User profile columns if they don't exist. Idempotent; must be called inside an app context."""
+    from sqlalchemy import text
+
+    new_cols = [
+        ("street_address",   "VARCHAR(200)"),
+        ("city",             "VARCHAR(200)"),
+        ("state",            "VARCHAR(200)"),
+        ("country",          "VARCHAR(200)"),
+        ("customer_contact", "VARCHAR(200)"),
+        ("customer_phone",   "VARCHAR(200)"),
+        ("payment_method",   "VARCHAR(20)"),
+        ("po_number",        "VARCHAR(100)"),
+        ("results_list",     "VARCHAR[]"),
+        ("results_cc_list",  "VARCHAR[]"),
+        ("invoice_list",     "VARCHAR[]"),
+        ("invoice_cc_list",  "VARCHAR[]"),
+    ]
+    with db.engine.connect() as conn:
+        for col, coltype in new_cols:
+            conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {coltype}"))
+        conn.commit()
+
+
 def seed_if_empty(app):
     """Auto-seed the database if no users exist. Safe to call at startup — never raises."""
     with app.app_context():
         try:
             db.create_all()
+            _add_missing_columns()
             from app.models import User as _User  # noqa: avoid circular at module level
             if _User.query.count() == 0:
                 print("No users found — running auto-seed.")

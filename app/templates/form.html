@@ -23,6 +23,9 @@
   <!-- Tagify 4.31.3 JS -->
   <script src="https://cdn.jsdelivr.net/npm/@yaireo/tagify@4.31.3/dist/tagify.min.js"></script>
 
+  <!-- Profile pre-fill data injected from server -->
+  <script>const PROFILE = {{ profile | tojson }};</script>
+
   <!-- App JS (defer ensures it runs after DOM + CDN scripts are ready) -->
   <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 
@@ -37,8 +40,12 @@
         <a href="/" class="is-active" aria-current="page">Request Testing</a>
         <a href="/">About</a>
         <a href="/">Contact</a>
-        {% if current_user.is_authenticated and current_user.role == 'admin' %}
-          <a href="{{ url_for('admin.submissions') }}">Admin</a>
+        {% if current_user.is_authenticated %}
+          {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('admin.submissions') }}">Admin</a>
+          {% else %}
+            <a href="{{ url_for('main.profile') }}">My Profile</a>
+          {% endif %}
         {% endif %}
         <a href="{{ url_for('auth.logout') }}">Logout</a>
       </nav>

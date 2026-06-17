@@ -193,16 +193,63 @@ document.addEventListener("DOMContentLoaded", async function () {
   await addSample();
 });
 
-// Initialise Tagify on email inputs
+// Initialise Tagify on email inputs, pre-filling from PROFILE if available
 document.addEventListener("DOMContentLoaded", function () {
   if (typeof Tagify === "undefined") return;
-  document.querySelectorAll(".email-tag-input").forEach(input => {
+
+  const emailFieldMap = {
+    "results-list":     "results_list",
+    "results-cc-list":  "results_cc_list",
+    "invoice-list":     "invoice_list",
+    "invoice-cc-list":  "invoice_cc_list",
+  };
+
+  Object.entries(emailFieldMap).forEach(([inputId, profileKey]) => {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const profileEmails = (typeof PROFILE !== "undefined" && PROFILE[profileKey]) || [];
     new Tagify(input, {
       pattern: /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/,
       duplicates: false,
-      dropdown: { enabled: 0 }
+      dropdown: { enabled: 0 },
+      ...(profileEmails.length ? { value: profileEmails.map(e => ({ value: e })) } : {})
     });
   });
+});
+
+// Pre-fill plain Customer Information inputs from saved profile
+document.addEventListener("DOMContentLoaded", function () {
+  if (typeof PROFILE === "undefined") return;
+
+  const fieldMap = {
+    "customer-name":    "customer_name",
+    "street-address":   "street_address",
+    "city":             "city",
+    "state":            "state",
+    "country":          "country",
+    "customer-contact": "customer_contact",
+    "customer-phone":   "customer_phone",
+  };
+
+  Object.entries(fieldMap).forEach(([inputId, profileKey]) => {
+    const el = document.getElementById(inputId);
+    if (el && PROFILE[profileKey]) el.value = PROFILE[profileKey];
+  });
+
+  // Set payment method radio (default is "po", only need to change if "cc")
+  if (PROFILE.payment_method) {
+    const radio = document.querySelector(`input[name="payment_method"][value="${PROFILE.payment_method}"]`);
+    if (radio && !radio.checked) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event("change"));
+    }
+  }
+
+  // Pre-fill po-number after the change event (which clears it)
+  if (PROFILE.po_number) {
+    const poInput = document.getElementById("po-number");
+    if (poInput) poInput.value = PROFILE.po_number;
+  }
 });
 
 // Payment method visibility toggle
