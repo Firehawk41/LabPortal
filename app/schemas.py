@@ -3,7 +3,7 @@
 import json
 import re
 
-from marshmallow import Schema, ValidationError, fields, post_load, validates_schema
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, post_load, validates_schema
 from marshmallow.validate import Length, OneOf
 
 from app.domain import Sample, TestingRequest
@@ -81,6 +81,9 @@ class SampleSchema(Schema):
 
 
 class SubmissionSchema(Schema):
+    class Meta:
+        unknown = EXCLUDE  # behalf_customer_id handled in route, not schema
+
     customer_name = fields.String(required=True, validate=[Length(max=200), _non_blank])
     street_address = fields.String(required=True, validate=[Length(max=200), _non_blank])
     city = fields.String(required=True, validate=[Length(max=200), _non_blank])

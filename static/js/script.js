@@ -261,8 +261,12 @@ function populateFromProfile(profile) {
 
 // Pre-fill plain Customer Information inputs from saved profile
 document.addEventListener("DOMContentLoaded", function () {
-  if (typeof PROFILE !== "undefined" && Object.keys(PROFILE).length) {
-    populateFromProfile(PROFILE);
+  const profileRaw = document.getElementById("sampleForm")?.dataset.profile;
+  if (profileRaw) {
+    try {
+      const profile = JSON.parse(profileRaw);
+      if (Object.keys(profile).length) populateFromProfile(profile);
+    } catch {}
   }
 
   // Admin: populate form when a customer is selected from the dropdown

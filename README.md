@@ -36,6 +36,8 @@ seed.py                       # Creates tables + demo data
 
 Routes never touch the ORM directly for submissions — they call `SubmissionRepository`, which translates between the pure `TestingRequest`/`Sample` dataclasses in `domain.py` and the SQLAlchemy models in `models.py`. When an admin submits via `/new-submission`, the submission is attributed to the selected customer and an `AuditLog` entry is written recording the admin's identity and the customer on whose behalf they submitted.
 
+Server-side profile data (company name, email lists, etc.) is injected into the form via a `data-profile` attribute on `#sampleForm` rather than an inline `<script>` tag. This keeps the page compatible with the strict `Content-Security-Policy` header (no `'unsafe-inline'`) that the app sets on every response. `SubmissionSchema` uses `Meta.unknown = EXCLUDE` so extra keys in the POST body (such as `behalf_customer_id`, which the route reads separately after validation) are silently ignored rather than causing a 400 error.
+
 ---
 
 ## Setup
