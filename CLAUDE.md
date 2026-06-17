@@ -66,6 +66,7 @@ static/
 
 - `parse_tagify()` and `EMAIL_RE` live in `app/schemas.py`; Tagify email fields arrive as raw JSON strings (`'[{"value":"a@b.com"}]'`) and are parsed/validated by the custom `TagifyEmailList` marshmallow field
 - `SubmissionSchema.load()` returns a `TestingRequest` domain object (via `@post_load`), not a dict; `SampleSchema` likewise returns `Sample`
+- `SubmissionSchema` has `class Meta: unknown = EXCLUDE` — extra keys in the POST body (e.g. `behalf_customer_id`) are silently dropped by the schema so the route can read them from the raw `data` dict after validation without triggering a 400
 - `GET /` redirects unauthenticated users to login; redirects admins to `/admin/submissions`; renders the form for customers
 - `GET /new-submission` (`@admin_required`) renders `form.html` with the full `customers` list (all `role="customer"` users ordered by `company_name`); form fields start blank
 - `GET /admin/api/customer/<id>/profile` (`@admin_required`) returns a customer's saved profile fields as JSON for JS pre-fill
@@ -88,6 +89,7 @@ static/
 - `form.html` conditionally loads `admin.css` and applies `class="admin-theme"` to `<body>` when the viewer is an admin, giving the form the same dark theme as the rest of the admin UI
 - `tagifyMap` (module-level object in `script.js`) stores Tagify instances keyed by input element ID so they can be reset programmatically
 - `populateFromProfile(profile)` fills all plain inputs, Tagify email fields, payment-method radio, and PO number from a profile object — used both for saved-profile pre-fill on page load and for admin customer-select pre-fill via fetch
+- Customer profile data is injected server-side as a `data-profile='...'` attribute on `#sampleForm` (JSON-encoded); `script.js` reads it via `document.getElementById("sampleForm").dataset.profile` and parses with `JSON.parse()`. **Do not use an inline `<script>` tag for this** — the CSP `script-src` does not include `'unsafe-inline'`, so inline scripts are blocked by every browser and the profile would never load
 - Admin form shows a "Submit on Behalf Of" `<select>` (populated server-side) and a hidden `#behalf-customer-id` input; selecting a customer fetches `/admin/api/customer/<id>/profile` and calls `populateFromProfile()`
 
 ## Submitted JSON Shape (POST /submit)
@@ -150,6 +152,8 @@ static/
 - Docker Compose, Dockerfile, render.yaml, seed.py for deployment/demo data
 - Admin submit on behalf of customer — `/new-submission` route, customer selector with JS pre-fill, server-side attribution, audit log entry
 - Dark admin theme applied to `form.html` when viewed by an admin
+- `SubmissionSchema` ignores unknown fields (`Meta.unknown = EXCLUDE`) so `behalf_customer_id` in the POST body doesn't cause a 400
+- Customer profile pre-fill via `data-profile` attribute (not inline script) to comply with CSP
 
 ### Explicitly Out of Scope (do not build without a new spec)
 
