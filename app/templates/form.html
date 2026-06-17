@@ -91,13 +91,10 @@
         <input name="results-cc-list" id="results-cc-list" class="email-tag-input">
       </div>
 
-      <div class="form-row">
-        <label>Payment Method:</label><br>
-        <input type="radio" id="pay-po" name="payment_method" value="po" checked>
-        <label for="pay-po">Purchase Order</label>
-
-        <input type="radio" id="pay-cc" name="payment_method" value="cc">
-        <label for="pay-cc">Credit Card</label>
+      <div class="form-row form-row--radio">
+        <span class="form-row__radio-label">Payment Method:</span>
+        <label class="radio-option"><input type="radio" id="pay-po" name="payment_method" value="po" checked> Purchase Order</label>
+        <label class="radio-option"><input type="radio" id="pay-cc" name="payment_method" value="cc"> Credit Card</label>
       </div>
 
       <!-- PO Number input -->

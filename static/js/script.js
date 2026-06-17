@@ -67,14 +67,14 @@ async function addSample(initialSampleType) {
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "btn btn--secondary btn--icon";
-  copyBtn.textContent = "⧉";
+  copyBtn.textContent = "Copy";
   copyBtn.title = "Copy this sample";
 
   // Remove button — deletes this row
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
   removeBtn.className = "btn btn--secondary btn--icon";
-  removeBtn.textContent = "🗑";
+  removeBtn.textContent = "Remove";
   removeBtn.title = "Remove this sample";
 
   row.appendChild(sampleId);

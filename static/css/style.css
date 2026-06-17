@@ -170,6 +170,27 @@ input[type="radio"] {
   margin-right: 0.4em;
 }
 
+.form-row--radio {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25em;
+}
+
+.form-row__radio-label {
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  font-size: 0.9em;
+  color: var(--color-text);
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {
