@@ -5,6 +5,7 @@ through SubmissionRepository.
 """
 
 import uuid
+from datetime import date, timedelta
 
 from app.domain import TestingRequest
 from app.extensions import db
@@ -53,6 +54,24 @@ class SubmissionRepository:
 
     def get_all(self) -> list[SubmissionModel]:
         return SubmissionModel.query.order_by(SubmissionModel.submitted_at.desc()).all()
+
+    def get_filtered(
+        self,
+        status: str | None = None,
+        customer: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[SubmissionModel]:
+        q = SubmissionModel.query.order_by(SubmissionModel.submitted_at.desc())
+        if status:
+            q = q.filter(SubmissionModel.status == status)
+        if customer:
+            q = q.filter(SubmissionModel.customer_name.ilike(f"%{customer}%"))
+        if date_from:
+            q = q.filter(SubmissionModel.submitted_at >= date_from)
+        if date_to:
+            q = q.filter(SubmissionModel.submitted_at < date_to + timedelta(days=1))
+        return q.all()
 
     def get_by_id(self, submission_id: str) -> SubmissionModel | None:
         try:

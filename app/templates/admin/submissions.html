@@ -18,6 +18,36 @@
 {% block content %}
   <h1>Submissions</h1>
 
+  <form method="get" action="{{ url_for('admin.submissions') }}" class="filter-bar">
+    <div class="filter-bar__field">
+      <label for="f-status">Status</label>
+      <select id="f-status" name="status">
+        <option value="">All</option>
+        {% for s in valid_statuses %}
+          <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s.replace('_', ' ').title() }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-bar__field">
+      <label for="f-customer">Customer</label>
+      <input id="f-customer" name="customer" placeholder="Name fragment" value="{{ filters.customer }}">
+    </div>
+    <div class="filter-bar__field">
+      <label for="f-from">From</label>
+      <input id="f-from" type="date" name="from" value="{{ filters.from }}">
+    </div>
+    <div class="filter-bar__field">
+      <label for="f-to">To</label>
+      <input id="f-to" type="date" name="to" value="{{ filters.to }}">
+    </div>
+    <div class="filter-bar__actions">
+      <button type="submit" class="btn btn--primary">Filter</button>
+      <a href="{{ url_for('admin.submissions') }}" class="btn btn--secondary">Clear</a>
+    </div>
+  </form>
+
+  <p class="result-count">{{ total }} submission{{ 's' if total != 1 else '' }}</p>
+
   <table class="data-table">
     <thead>
       <tr>
@@ -62,7 +92,7 @@
         {% if p == page %}
           <span class="is-current">{{ p }}</span>
         {% else %}
-          <a href="{{ url_for('admin.submissions', page=p) }}">{{ p }}</a>
+          <a href="{{ url_for('admin.submissions', page=p, status=filters.status, customer=filters.customer, **{'from': filters.from, 'to': filters.to}) }}">{{ p }}</a>
         {% endif %}
       {% endfor %}
     </div>

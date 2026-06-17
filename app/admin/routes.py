@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import abort, jsonify, redirect, render_template, request, url_for
 
 from app.admin import admin_bp
@@ -9,6 +11,14 @@ from app.repositories import SubmissionRepository
 submission_repo = SubmissionRepository()
 
 PER_PAGE = 20
+
+
+def _parse_date(s):
+    """Return a datetime.date from a YYYY-MM-DD string, or None on any error."""
+    try:
+        return datetime.strptime(s.strip(), "%Y-%m-%d").date()
+    except (ValueError, AttributeError):
+        return None
 
 
 @admin_bp.route("/")
@@ -24,7 +34,24 @@ def submissions():
     if page < 1:
         page = 1
 
-    all_submissions = submission_repo.get_all()
+    status    = request.args.get("status", "").strip()
+    customer  = request.args.get("customer", "").strip()
+    date_from = _parse_date(request.args.get("from", ""))
+    date_to   = _parse_date(request.args.get("to", ""))
+
+    filters = {
+        "status":   status,
+        "customer": customer,
+        "from":     request.args.get("from", ""),
+        "to":       request.args.get("to", ""),
+    }
+
+    all_submissions = submission_repo.get_filtered(
+        status=status or None,
+        customer=customer or None,
+        date_from=date_from,
+        date_to=date_to,
+    )
     total = len(all_submissions)
     start = (page - 1) * PER_PAGE
     page_items = all_submissions[start:start + PER_PAGE]
@@ -34,7 +61,9 @@ def submissions():
         "admin/submissions.html",
         submissions=page_items,
         page=page,
+        total=total,
         total_pages=total_pages,
+        filters=filters,
         valid_statuses=sorted(VALID_STATUSES),
     )
 
