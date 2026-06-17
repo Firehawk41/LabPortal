@@ -11,7 +11,7 @@
 {% block nav %}
   <a href="{{ url_for('admin.submissions') }}">Submissions</a>
   <a href="{{ url_for('admin.users') }}" class="is-active" aria-current="page">Users</a>
-  <a href="{{ url_for('main.index') }}">Request Testing</a>
+  <a href="{{ url_for('main.new_submission') }}">New Submission</a>
   <a href="{{ url_for('auth.logout') }}">Logout</a>
 {% endblock %}
 

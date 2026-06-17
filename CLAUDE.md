@@ -30,7 +30,7 @@ app/
 ├── auth/                       # Blueprint: /login, /logout
 │   ├── decorators.py           # login_required (re-export), admin_required
 │   └── routes.py
-├── main/                        # Blueprint: / (form), /submit
+├── main/                        # Blueprint: / (customer form), /new-submission (admin form), /submit
 │   └── routes.py
 ├── admin/                        # Blueprint: /admin/* (dashboard, submissions, users)
 │   └── routes.py
@@ -45,14 +45,14 @@ app/
 static/
 ├── css/style.css               # Corporate light theme (unchanged)
 ├── css/admin.css                # Dark theme overrides for admin pages (.admin-theme)
-├── js/script.js                # Client-side form logic (Select2, Tagify, modal) — unchanged
+├── js/script.js                # Client-side form logic — tagifyMap, populateFromProfile(), Select2, Tagify, modal
 └── data/analyses.json          # Catalog of ~43 analyses in 7 groups — unchanged
 ```
 
 ## Current Architecture
 
 - **Backend:** Flask application factory + Blueprints (`auth`, `main`, `admin`)
-- **Database:** PostgreSQL via Flask-SQLAlchemy. Tables: `users`, `submissions`, `samples`, `audit_log` (audit_log table exists but has no routes/UI yet — repositories leave `# TODO` markers for future audit writes)
+- **Database:** PostgreSQL via Flask-SQLAlchemy. Tables: `users`, `submissions`, `samples`, `audit_log` (audit_log table now written on admin submissions; no UI yet)
 - **Three-layer separation, strictly enforced:**
   - `domain.py` — pure dataclasses (`Sample`, `TestingRequest`), zero framework imports
   - `schemas.py` — marshmallow boundary: validates/deserializes incoming JSON into domain objects, rejects bad input with 400 + descriptive JSON errors (never 500)
@@ -66,7 +66,10 @@ static/
 
 - `parse_tagify()` and `EMAIL_RE` live in `app/schemas.py`; Tagify email fields arrive as raw JSON strings (`'[{"value":"a@b.com"}]'`) and are parsed/validated by the custom `TagifyEmailList` marshmallow field
 - `SubmissionSchema.load()` returns a `TestingRequest` domain object (via `@post_load`), not a dict; `SampleSchema` likewise returns `Sample`
-- `POST /submit` is `@login_required`; on success stamps `current_user.id` as `user_id`, calls `SubmissionRepository.save()`, returns 201 with `{"message": "Submission received", "submission_id": "<uuid>"}`; validation failures return 400 with `{"errors": {...}}`
+- `GET /` redirects unauthenticated users to login; redirects admins to `/admin/submissions`; renders the form for customers
+- `GET /new-submission` (`@admin_required`) renders `form.html` with the full `customers` list (all `role="customer"` users ordered by `company_name`); form fields start blank
+- `GET /admin/api/customer/<id>/profile` (`@admin_required`) returns a customer's saved profile fields as JSON for JS pre-fill
+- `POST /submit` is `@login_required`; for customers, stamps `current_user.id` as `user_id`; for admins, reads `behalf_customer_id` from JSON body, validates it is a real customer UUID, attributes the submission to that customer, and writes an `AuditLog` entry (`field_name="submitted_by_admin"`, `changed_by=<admin_id>`, `new_value=<customer_id>`). Returns 201 `{"message": "Submission received", "submission_id": "<uuid>"}` on success; 400 on validation error.
 - `VALID_SAMPLE_TYPES` (schemas.py): `chemical`, `water`, `wafer`
 - `VALID_PROCESSING_TIMES` (schemas.py): `Standard`, `Next Day`, `Rush`
 - `VALID_ROLES` (models.py): `customer`, `admin`
@@ -82,7 +85,10 @@ static/
 - `createAnalysisDropdown()` returns a disabled placeholder `<select>` on fetch failure (never returns undefined)
 - Processing time is a `<select>` restricted to Standard / Next Day / Rush
 - All 11 customer-info inputs have matching `id` and `for` attributes for label linkage
-- `form.html`'s nav gains an "Admin" link (for admin users) and "Logout" link, but is otherwise unchanged
+- `form.html` conditionally loads `admin.css` and applies `class="admin-theme"` to `<body>` when the viewer is an admin, giving the form the same dark theme as the rest of the admin UI
+- `tagifyMap` (module-level object in `script.js`) stores Tagify instances keyed by input element ID so they can be reset programmatically
+- `populateFromProfile(profile)` fills all plain inputs, Tagify email fields, payment-method radio, and PO number from a profile object — used both for saved-profile pre-fill on page load and for admin customer-select pre-fill via fetch
+- Admin form shows a "Submit on Behalf Of" `<select>` (populated server-side) and a hidden `#behalf-customer-id` input; selecting a customer fetches `/admin/api/customer/<id>/profile` and calls `populateFromProfile()`
 
 ## Submitted JSON Shape (POST /submit)
 
@@ -102,6 +108,7 @@ static/
   "payment_method": "po",
   "po_number": "PO-9876",
   "cc_number": "",
+  "behalf_customer_id": "",
   "samples": [
     {
       "sample_id": "S-001",
@@ -115,6 +122,8 @@ static/
 ```
 
 `results_list`/`results_cc_list`/`invoice_list`/`invoice_cc_list` arrive as raw Tagify JSON strings and are parsed server-side into plain email lists by `TagifyEmailList`.
+
+`behalf_customer_id`: UUID string of the selected customer when submitted by an admin; empty string for customer self-submissions (field is ignored server-side for non-admins).
 
 ---
 
@@ -139,6 +148,8 @@ static/
 - Processing time restricted to valid enum values
 - Inline error display via `#form-error`
 - Docker Compose, Dockerfile, render.yaml, seed.py for deployment/demo data
+- Admin submit on behalf of customer — `/new-submission` route, customer selector with JS pre-fill, server-side attribution, audit log entry
+- Dark admin theme applied to `form.html` when viewed by an admin
 
 ### Explicitly Out of Scope (do not build without a new spec)
 

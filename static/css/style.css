@@ -118,6 +118,7 @@ h2 {
 input[type="text"],
 input[type="tel"],
 input[type="email"],
+input[type="password"],
 input:not([type]),
 select,
 textarea {
@@ -138,8 +139,56 @@ textarea:focus {
   border-color: var(--color-primary);
 }
 
+/* ---------- Third-party widget overrides ---------- */
+
+/* Tagify: make the tag container match plain inputs */
+.tagify {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+  border-radius: 3px;
+  max-width: 420px;
+}
+
+.tagify:focus-within {
+  border-color: var(--color-primary);
+}
+
+/* Select2: make the selection box match plain inputs */
+.select2-container .select2-selection--multiple,
+.select2-container .select2-selection--single {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+  border-radius: 3px;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--multiple,
+.select2-container--default.select2-container--open .select2-selection--single {
+  border-color: var(--color-primary);
+}
+
 input[type="radio"] {
   margin-right: 0.4em;
+}
+
+.form-row--radio {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25em;
+}
+
+.form-row__radio-label {
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  font-size: 0.9em;
+  color: var(--color-text);
+  margin-bottom: 0;
+  cursor: pointer;
 }
 
 /* ---------- Buttons ---------- */
@@ -207,6 +256,38 @@ input[type="radio"] {
   padding: 0.4em 0.6em;
   line-height: 1;
   font-size: 1.1em;
+}
+
+/* ---------- Profile page ---------- */
+
+.profile-email {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+  margin-bottom: 1.5em;
+}
+
+.profile-saved {
+  background: #EAF5EA;
+  border: 1px solid #5DA75D;
+  border-radius: 3px;
+  padding: 0.75em 1em;
+  margin-bottom: 1.25em;
+  font-size: 0.9em;
+}
+
+.field-error {
+  display: block;
+  color: #C0392B;
+  font-size: 0.85em;
+  margin-top: 0.25em;
+}
+
+/* ---------- Credit card notice ---------- */
+
+.cc-notice {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9em;
 }
 
 /* ---------- Error / alert ---------- */

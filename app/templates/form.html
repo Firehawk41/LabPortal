@@ -6,6 +6,9 @@
   <title>YourLab Testing Request Form</title>
 
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
+  {% if current_user.is_authenticated and current_user.role == 'admin' %}
+  <link href="{{ url_for('static', filename='css/admin.css') }}" rel="stylesheet" />
+  {% endif %}
 
   <!-- Select2 4.0.13 (stable — not RC) -->
   <!-- TODO: add integrity="sha384-..." crossorigin="anonymous" after verifying at https://www.srihash.org/ -->
@@ -23,11 +26,14 @@
   <!-- Tagify 4.31.3 JS -->
   <script src="https://cdn.jsdelivr.net/npm/@yaireo/tagify@4.31.3/dist/tagify.min.js"></script>
 
+  <!-- Profile pre-fill data injected from server -->
+  <script>const PROFILE = {{ profile | tojson }};</script>
+
   <!-- App JS (defer ensures it runs after DOM + CDN scripts are ready) -->
   <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 
 </head>
-<body>
+<body class="{% if current_user.is_authenticated and current_user.role == 'admin' %}admin-theme{% endif %}">
   <header class="site-header">
     <div class="site-header__inner">
       <a href="/" class="site-header__brand">YourLab</a>
@@ -37,8 +43,12 @@
         <a href="/" class="is-active" aria-current="page">Request Testing</a>
         <a href="/">About</a>
         <a href="/">Contact</a>
-        {% if current_user.is_authenticated and current_user.role == 'admin' %}
-          <a href="{{ url_for('admin.submissions') }}">Admin</a>
+        {% if current_user.is_authenticated %}
+          {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('admin.submissions') }}">Admin</a>
+          {% else %}
+            <a href="{{ url_for('main.profile') }}">My Profile</a>
+          {% endif %}
         {% endif %}
         <a href="{{ url_for('auth.logout') }}">Logout</a>
       </nav>
@@ -49,12 +59,28 @@
   <h1>Testing Request Form</h1>
 
   <form id="sampleForm">
+    {% if customers %}
+    <fieldset class="form-section" id="admin-customer-section">
+      <legend>Submit on Behalf Of</legend>
+      <div class="form-row">
+        <label for="behalf-customer">Customer account:</label>
+        <select id="behalf-customer">
+          <option value="">— select a customer —</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.company_name or c.email }} ({{ c.email }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <input type="hidden" id="behalf-customer-id" value="">
+    </fieldset>
+    {% endif %}
+
     <fieldset class="form-section">
       <legend>Customer Information</legend>
 
       <div class="form-row">
         <label for="customer-name">Company:</label>
-        <input name="customer-name" id="customer-name" placeholder="Company" required>
+        <input name="customer-name" id="customer-name" required>
       </div>
       <div class="form-row">
         <label for="street-address">Street Address:</label>
@@ -70,7 +96,7 @@
       </div>
       <div class="form-row">
         <label for="country">Country:</label>
-        <input name="country" id="country" placeholder="USA" required>
+        <input name="country" id="country" required>
       </div>
 
       <div class="form-row">
@@ -91,13 +117,10 @@
         <input name="results-cc-list" id="results-cc-list" class="email-tag-input">
       </div>
 
-      <div class="form-row">
-        <label>Payment Method:</label><br>
-        <input type="radio" id="pay-po" name="payment_method" value="po" checked>
-        <label for="pay-po">Purchase Order</label>
-
-        <input type="radio" id="pay-cc" name="payment_method" value="cc">
-        <label for="pay-cc">Credit Card</label>
+      <div class="form-row form-row--radio">
+        <span class="form-row__radio-label">Payment Method:</span>
+        <label class="radio-option"><input type="radio" id="pay-po" name="payment_method" value="po" checked> Purchase Order</label>
+        <label class="radio-option"><input type="radio" id="pay-cc" name="payment_method" value="cc"> Credit Card</label>
       </div>
 
       <!-- PO Number input -->
@@ -106,10 +129,9 @@
         <input name="po-number" id="po-number" placeholder="Enter PO number">
       </div>
 
-      <!-- CC info input -->
+      <!-- CC info message -->
       <div class="form-row hidden" id="cc-info">
-        <label for="cc-number">Credit Card (Last 4 digits &amp; name):</label>
-        <input name="cc-number" id="cc-number" placeholder="1234 John Doe">
+        <p class="cc-notice">A link for credit card payment will be sent with the invoice.</p>
       </div>
 
       <div class="form-row">

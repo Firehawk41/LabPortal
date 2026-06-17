@@ -34,7 +34,7 @@ wsgi.py                       # WSGI entry point (`app = create_app()`)
 seed.py                       # Creates tables + demo data
 ```
 
-Routes never touch the ORM directly for submissions — they call `SubmissionRepository`, which translates between the pure `TestingRequest`/`Sample` dataclasses in `domain.py` and the SQLAlchemy models in `models.py`.
+Routes never touch the ORM directly for submissions — they call `SubmissionRepository`, which translates between the pure `TestingRequest`/`Sample` dataclasses in `domain.py` and the SQLAlchemy models in `models.py`. When an admin submits via `/new-submission`, the submission is attributed to the selected customer and an `AuditLog` entry is written recording the admin's identity and the customer on whose behalf they submitted.
 
 ---
 
@@ -113,8 +113,8 @@ Re-running `seed.py` is safe — it skips users/submissions that already exist.
 
 | Role | Access |
 |---|---|
-| `customer` | `/` (testing request form), `/submit` |
-| `admin` | Everything a customer can access, plus `/admin/submissions`, `/admin/submissions/<id>`, `/admin/users` |
+| `customer` | `/` (testing request form), `/profile`, `/submit` |
+| `admin` | `/new-submission` (submit on behalf of customer), `/admin/submissions`, `/admin/submissions/<id>`, `/admin/users`, `/admin/api/customer/<id>/profile` |
 
 There is no public self-registration — admins create customer accounts via `/admin/users/create`.
 

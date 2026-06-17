@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile — YourLab{% endblock %}
+
+{% block content %}
+<h1>My Profile</h1>
+
+{% if saved %}
+  <div class="profile-saved" role="status">Profile saved successfully.</div>
+{% endif %}
+
+<p class="profile-email">Logged in as <strong>{{ current_user.email }}</strong></p>
+
+<form method="post" action="{{ url_for('main.profile') }}">
+
+  <fieldset class="form-section">
+    <legend>Company &amp; Contact</legend>
+
+    <div class="form-row">
+      <label for="p-company">Company:</label>
+      <input type="text" id="p-company" name="company_name" value="{{ data.company_name }}" required>
+      {% if errors.company_name %}<span class="field-error">{{ errors.company_name }}</span>{% endif %}
+    </div>
+    <div class="form-row">
+      <label for="p-street">Street Address:</label>
+      <input type="text" id="p-street" name="street_address" value="{{ data.street_address }}">
+    </div>
+    <div class="form-row">
+      <label for="p-city">City:</label>
+      <input type="text" id="p-city" name="city" value="{{ data.city }}">
+    </div>
+    <div class="form-row">
+      <label for="p-state">State:</label>
+      <input type="text" id="p-state" name="state" value="{{ data.state }}">
+    </div>
+    <div class="form-row">
+      <label for="p-country">Country:</label>
+      <input type="text" id="p-country" name="country" value="{{ data.country }}">
+    </div>
+    <div class="form-row">
+      <label for="p-contact">Test requested by:</label>
+      <input type="text" id="p-contact" name="customer_contact" value="{{ data.customer_contact }}">
+    </div>
+    <div class="form-row">
+      <label for="p-phone">Phone #:</label>
+      <input type="tel" id="p-phone" name="customer_phone" value="{{ data.customer_phone }}">
+    </div>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Distribution Lists &amp; Payment Defaults</legend>
+
+    <div class="form-row">
+      <label for="p-results">Results Distribution List / Main:</label>
+      <textarea id="p-results" name="results_list" rows="3" placeholder="One email per line">{{ data.results_list_text }}</textarea>
+      {% if errors.results_list %}<span class="field-error">{{ errors.results_list }}</span>{% endif %}
+    </div>
+    <div class="form-row">
+      <label for="p-results-cc">Results Distribution List / CC:</label>
+      <textarea id="p-results-cc" name="results_cc_list" rows="2" placeholder="One email per line">{{ data.results_cc_text }}</textarea>
+      {% if errors.results_cc_list %}<span class="field-error">{{ errors.results_cc_list }}</span>{% endif %}
+    </div>
+    <div class="form-row">
+      <label for="p-invoice">Invoice Distribution List / Main:</label>
+      <textarea id="p-invoice" name="invoice_list" rows="3" placeholder="One email per line">{{ data.invoice_list_text }}</textarea>
+      {% if errors.invoice_list %}<span class="field-error">{{ errors.invoice_list }}</span>{% endif %}
+    </div>
+    <div class="form-row">
+      <label for="p-invoice-cc">Invoice Distribution List / CC:</label>
+      <textarea id="p-invoice-cc" name="invoice_cc_list" rows="2" placeholder="One email per line">{{ data.invoice_cc_text }}</textarea>
+      {% if errors.invoice_cc_list %}<span class="field-error">{{ errors.invoice_cc_list }}</span>{% endif %}
+    </div>
+
+    <div class="form-row form-row--radio">
+      <span class="form-row__radio-label">Default Payment Method:</span>
+      <label class="radio-option">
+        <input type="radio" name="payment_method" value="po" {% if data.payment_method != 'cc' %}checked{% endif %}> Purchase Order
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="payment_method" value="cc" {% if data.payment_method == 'cc' %}checked{% endif %}> Credit Card
+      </label>
+    </div>
+
+    <div class="form-row" id="profile-po-row" {% if data.payment_method == 'cc' %}style="display:none"{% endif %}>
+      <label for="p-po">Default PO Number:</label>
+      <input type="text" id="p-po" name="po_number" value="{{ data.po_number }}">
+      {% if errors.po_number %}<span class="field-error">{{ errors.po_number }}</span>{% endif %}
+    </div>
+  </fieldset>
+
+  <button type="submit" class="btn btn--primary">Save Profile</button>
+</form>
+
+<script>
+  document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
+    radio.addEventListener("change", function() {
+      document.getElementById("profile-po-row").style.display =
+        this.value === "po" ? "" : "none";
+    });
+  });
+</script>
+{% endblock %}

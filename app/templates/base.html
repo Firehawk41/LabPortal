@@ -17,6 +17,8 @@
           {% if current_user.is_authenticated %}
             {% if current_user.role == 'admin' %}
               <a href="{{ url_for('admin.submissions') }}">Admin</a>
+            {% else %}
+              <a href="{{ url_for('main.profile') }}">My Profile</a>
             {% endif %}
             <a href="{{ url_for('main.index') }}">Request Testing</a>
             <a href="{{ url_for('auth.logout') }}">Logout</a>

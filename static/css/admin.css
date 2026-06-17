@@ -17,6 +17,52 @@
   color: #E6E9EF;
 }
 
+/* ---------- Filter bar ---------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75em;
+  align-items: flex-end;
+  margin-bottom: 1em;
+  padding: 1em 1.25em;
+  background: var(--color-section-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.filter-bar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.filter-bar__field label {
+  font-size: 0.8em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.filter-bar__field input,
+.filter-bar__field select {
+  width: auto;
+  max-width: none;
+  min-width: 140px;
+}
+
+.filter-bar__actions {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-end;
+}
+
+.result-count {
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+  margin: 0 0 0.75em;
+}
+
 /* ---------- Tables ---------- */
 
 .data-table {
