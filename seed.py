@@ -236,15 +236,12 @@ def _add_missing_columns():
 
 
 def seed_if_empty(app):
-    """Auto-seed the database if no users exist. Safe to call at startup — never raises."""
+    """Seed/backfill the database at startup. Safe to call repeatedly — all operations are idempotent."""
     with app.app_context():
         try:
             db.create_all()
             _add_missing_columns()
-            from app.models import User as _User  # noqa: avoid circular at module level
-            if _User.query.count() == 0:
-                print("No users found — running auto-seed.")
-                _seed_data()
+            _seed_data()
         except Exception as exc:
             app.logger.warning("Auto-seed failed (non-fatal): %s", exc)
 
