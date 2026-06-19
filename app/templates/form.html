@@ -35,11 +35,7 @@
     <div class="site-header__inner">
       <a href="/" class="site-header__brand">YourLab</a>
       <nav class="site-header__nav" aria-label="Main navigation">
-        <a href="/">Home</a>
-        <a href="/">Services</a>
-        <a href="/" class="is-active" aria-current="page">Request Testing</a>
-        <a href="/">About</a>
-        <a href="/">Contact</a>
+        <a href="{{ url_for('main.index') }}" class="is-active" aria-current="page">Request Testing</a>
         {% if current_user.is_authenticated %}
           {% if current_user.role == 'admin' %}
             <a href="{{ url_for('admin.submissions') }}">Admin</a>
@@ -156,30 +152,8 @@
   </main>
 
   <footer class="site-footer">
-    <div class="site-footer__links">
-      <div class="site-footer__col">
-        <h3>Company</h3>
-        <a href="/">About Us</a>
-        <a href="/">Careers</a>
-        <a href="/">News</a>
-      </div>
-      <div class="site-footer__col">
-        <h3>Services</h3>
-        <a href="/">Testing Capabilities</a>
-        <a href="/">Sample Requirements</a>
-        <a href="/">Turnaround Times</a>
-      </div>
-      <div class="site-footer__col">
-        <h3>Support</h3>
-        <a href="/">Request Testing</a>
-        <a href="/">FAQs</a>
-        <a href="/">Contact Us</a>
-      </div>
-    </div>
     <div class="site-footer__contact">
-      <p>[Street Address, City, State ZIP]</p>
-      <p>Phone: [Phone Number]</p>
-      <p>&copy; [Company Name]. All rights reserved.</p>
+      <p>&copy; YourLab. All rights reserved.</p>
     </div>
   </footer>
 

@@ -118,6 +118,23 @@ def _seed_data():
     for customer in CUSTOMERS:
         existing = User.query.filter_by(email=customer["email"]).first()
         if existing:
+            if existing.street_address is None:
+                existing.company_name     = customer["company_name"]
+                existing.street_address   = customer["street_address"]
+                existing.city             = customer["city"]
+                existing.state            = customer["state"]
+                existing.country          = customer["country"]
+                existing.customer_contact = customer["customer_contact"]
+                existing.customer_phone   = customer["customer_phone"]
+                existing.results_list     = customer.get("results_list", [])
+                existing.results_cc_list  = customer.get("results_cc_list", [])
+                existing.invoice_list     = customer.get("invoice_list", [])
+                existing.invoice_cc_list  = customer.get("invoice_cc_list", [])
+                existing.payment_method   = customer.get("payment_method", "po")
+                existing.po_number        = customer.get("po_number", "")
+                print(f"Backfilled profile for: {customer['email']}")
+            else:
+                print(f"Skipped (profile already set): {customer['email']}")
             customer_users.append(existing)
             continue
         user = User(
