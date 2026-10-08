@@ -176,6 +176,7 @@ def _to_row(s: TRSubmission, tr_number: str) -> TRSubmissionRow:
         customer_phone=s.customer_phone,
         payment_method=int(s.payment_method),
         po_number=s.po_number,
+        expected_arrival_date=s.expected_arrival_date,
         service_date_override=s.service_date_override,
         **(_receipt_columns(s.receipt) if s.receipt else {}),
     )
@@ -279,6 +280,7 @@ def _from_row(row: TRSubmissionRow) -> TRSubmission:
         po_number=row.po_number,
         **{kind: tuple(email for _, email in sorted(values)) for kind, values in emails.items()},
         samples=tuple(_sample_from_row(s) for s in row.samples),
+        expected_arrival_date=row.expected_arrival_date,
         receipt=receipt,
         service_date_override=row.service_date_override,
         status_history=tuple(

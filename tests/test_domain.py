@@ -197,5 +197,19 @@ def test_json_dump_round_trips():
     sub = _received(submission())
     data = sub.model_dump(mode="json")
     assert data["effective_service_date"] == "2026-10-14"
-    rebuilt = type(sub).model_validate({k: v for k, v in data.items() if k not in {"effective_service_date", "is_rush"}})
+    rebuilt = type(sub).model_validate({k: v for k, v in data.items() if k not in {"effective_service_date", "estimated_service_date", "is_rush"}})
     assert rebuilt == sub
+
+
+def test_estimated_service_date_until_received():
+    sub = submission(expected_arrival_date=date(2026, 10, 9),
+                     samples=(sample(1, processing_time=ProcessingTime.TWO_DAYS),))
+    assert sub.estimated_service_date == date(2026, 10, 13)  # Fri + 2 working days
+    assert sub.effective_service_date is None
+    received = _received(sub, day=date(2026, 10, 12))
+    assert received.estimated_service_date is None  # the real one takes over
+    assert received.effective_service_date == date(2026, 10, 14)
+
+
+def test_no_estimate_without_expected_date():
+    assert submission().estimated_service_date is None

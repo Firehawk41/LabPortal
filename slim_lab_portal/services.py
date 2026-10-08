@@ -4,7 +4,8 @@ Callers commit."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
@@ -69,10 +70,15 @@ class SubmissionService:
         repo: TRSubmissionRepository,
         reference: ReferenceData,
         clock: Callable[[], datetime] = _utcnow,
+        lab_timezone: str = "America/Chicago",
     ) -> None:
         self.repo = repo
         self.reference = reference
         self.clock = clock
+        self.lab_tz = ZoneInfo(lab_timezone)
+
+    def lab_today(self) -> date:
+        return self.clock().astimezone(self.lab_tz).date()
 
     # ------------------------------------------------------------ submit
 
@@ -85,6 +91,9 @@ class SubmissionService:
             raise SubmissionRejected([FieldError(("customer_id",), f"unknown customer {customer_id}")])
         if customer.is_group:
             errors.append(FieldError(("customer_id",), "a customer group cannot submit; choose one of its sites"))
+
+        if data.expected_arrival_date is not None and data.expected_arrival_date < self.lab_today():
+            errors.append(FieldError(("expected_arrival_date",), "expected arrival cannot be in the past"))
 
         locations = self.reference.locations(customer_id)
         if locations and data.location not in locations:
@@ -120,6 +129,7 @@ class SubmissionService:
                 customer_phone=data.customer_phone,
                 payment_method=data.payment_method,
                 po_number=data.po_number,
+                expected_arrival_date=data.expected_arrival_date,
                 results_to=tuple(data.results_to),
                 results_cc=tuple(data.results_cc),
                 invoice_to=tuple(data.invoice_to),
@@ -203,6 +213,7 @@ class SubmissionService:
                 note=data.note,
                 date_received=data.date_received,
                 received_by=received_by,
+                today=self.lab_today(),
             )
             return self.repo.record_transition(before, after)
         except TransitionNotAllowed as e:

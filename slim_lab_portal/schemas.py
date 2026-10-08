@@ -39,6 +39,7 @@ class SubmissionIn(_Input):
     customer_id: int | None = None  # staff submitting on a customer's behalf; customers omit it
     request_type: RequestType
     location: Annotated[Text, StringConstraints(max_length=20)] = ""
+    expected_arrival_date: date | None = None  # optional; today or later (lab's local date)
     customer_contact: Annotated[Text, StringConstraints(min_length=1, max_length=200)]
     customer_phone: Annotated[Text, StringConstraints(min_length=1, max_length=50)]
     payment_method: PaymentMethod

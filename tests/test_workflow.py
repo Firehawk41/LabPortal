@@ -79,3 +79,12 @@ def test_allowed_next_statuses():
     assert allowed_next_statuses(TRStatus.SUBMITTED, ActorType.CUSTOMER_USER) == (TRStatus.CANCELLED,)
     assert allowed_next_statuses(TRStatus.RECEIVED, ActorType.CUSTOMER_USER) == ()
     assert allowed_next_statuses(TRStatus.SUBMITTED, ActorType.STAFF) == (TRStatus.RECEIVED, TRStatus.CANCELLED)
+
+
+def test_receipt_cannot_be_dated_in_the_future():
+    with pytest.raises(TransitionNotAllowed, match="future"):
+        transition(submission(), TRStatus.RECEIVED, actor=STAFF_ACTOR, at=NOW,
+                   date_received=date(2026, 10, 9), received_by="JM", today=date(2026, 10, 8))
+    ok = transition(submission(), TRStatus.RECEIVED, actor=STAFF_ACTOR, at=NOW,
+                    date_received=date(2026, 10, 8), received_by="JM", today=date(2026, 10, 8))
+    assert ok.receipt.date_received == date(2026, 10, 8)

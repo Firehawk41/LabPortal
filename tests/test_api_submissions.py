@@ -158,11 +158,11 @@ def test_status_workflow_over_http(client, staff_user, customer_user):
     login_api(client, "staff@lab.example")
     client.post("/api/submissions", json=payload(customer_id=1))
 
-    response = client.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": "2026-10-09"})
+    response = client.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": "2026-10-07"})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["receipt"]["received_by"] == "JM"  # defaults to the staff user's initials
-    assert body["effective_service_date"] == "2026-10-14"
+    assert body["effective_service_date"] == "2026-10-12"
 
     assert client.post("/api/submissions/TR00001/status", json={"to_status": 6}).status_code == 409
     for status in (3, 4, 4, 5, 6):
@@ -180,7 +180,7 @@ def test_customer_cancels_own_submitted_request(client, staff_user, customer_use
     assert response.status_code == 200
     assert response.json()["status_history"][-1]["note"] == "duplicate"
     assert client.post("/api/submissions/TR00002/status",
-                       json={"to_status": 2, "date_received": "2026-10-09"}).status_code == 409
+                       json={"to_status": 2, "date_received": "2026-10-07"}).status_code == 409
 
 
 def test_reference_for_customer(as_customer):
@@ -202,3 +202,26 @@ def test_reference_for_staff_lists_customers(as_staff):
 
 def test_reference_needs_login(client):
     assert client.get("/api/reference").status_code == 401
+
+
+def test_expected_arrival_date(as_customer):
+    from datetime import date, timedelta
+
+    future = (date.today() + timedelta(days=10)).isoformat()
+    body = as_customer.post("/api/submissions", json=payload(expected_arrival_date=future)).json()
+    assert body["expected_arrival_date"] == future
+    assert body["estimated_service_date"] is not None
+    past = (date.today() - timedelta(days=10)).isoformat()
+    response = as_customer.post("/api/submissions", json=payload(expected_arrival_date=past))
+    assert response.status_code == 422
+    assert ["body", "expected_arrival_date"] in [d["loc"] for d in response.json()["detail"]]
+
+
+def test_future_receipt_date_is_refused(as_staff):
+    from datetime import date, timedelta
+
+    as_staff.post("/api/submissions", json=payload(customer_id=1))
+    tomorrow = (date.today() + timedelta(days=2)).isoformat()
+    response = as_staff.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": tomorrow})
+    assert response.status_code == 409
+    assert "future" in response.json()["detail"]

@@ -242,6 +242,7 @@ The portal fills it from the SLIM customer record. The xlsx parser fills it from
 | `customer_phone` | str | same | |
 | `payment_method` | PaymentMethod | — | |
 | `po_number` | str = "" | `po_information` | Required iff PURCHASE_ORDER |
+| `expected_arrival_date` | date \| None | — | Optional customer estimate; today or later (lab date) at submission. Never copied into the receipt |
 | `results_to` | tuple[EmailStr, ...] | `results_email_main` | At least one |
 | `results_cc` | tuple[EmailStr, ...] | `results_email_cc` | |
 | `invoice_to` | tuple[EmailStr, ...] | `invoice_email_main` | At least one |
@@ -258,6 +259,8 @@ Computed:
 - `effective_service_date -> date | None`: `None` until received; else the override if
   set; else `date_received` + the slowest sample's working days (weekends skipped),
   exactly as v1 computes it.
+- `estimated_service_date -> date | None`: only until received — `expected_arrival_date` + the
+  slowest sample's working days; `None` without an expected date. The UI labels it as an estimate.
 - `is_rush -> bool`: any sample with 0 working days or `NEXT_DAY_RUSH`.
 
 ### Validation rules (invariants, enforced in the domain model)
@@ -272,6 +275,10 @@ Computed:
    submission has a receipt only if it was cancelled after being received.
 7. Sample positions are 1..n with no gaps; sample names are unique within a submission
    (case-insensitive).
+
+Rules that need a clock (checked in the workflow/service with the lab's local date, `LAB_TIMEZONE`):
+`date_received` may not be after today; `expected_arrival_date` may not be before today at
+submission. A receipt dated before the submission is allowed (samples can arrive first).
 
 Rules that need reference data (analysis allowed for request type, IDs exist, customer
 location valid) are checked in the portal's submission service, not in the frozen model.
@@ -447,3 +454,13 @@ Notes:
 - Water packages: contents and whether customers may pick them.
 - Chemicals not in the list: for now the customer must pick an existing chemical; a
   "not listed — describe it" path needs a lab decision on who creates the SLIM record.
+
+## 11. Parked ideas (raise with the user; don't build without a go-ahead)
+
+The portal is a portfolio demo: modular but narrow. These came up and are deliberately not built:
+
+- Customer/staff can update `expected_arrival_date` while SUBMITTED (with history).
+- Expected arrival *time* for Same Day / Call-in RUSH; making the date required for rush samples.
+- Staff "incoming" (expected today/this week) and "overdue" (expected passed, not received) views.
+- Hash-chained audit (slim-domain `infrastructure/audit.py`) over the TR tables.
+- Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.

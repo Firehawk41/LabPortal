@@ -33,10 +33,12 @@ def get_reference(request: Request) -> ReferenceData:
 
 
 def get_service(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
     reference: Annotated[ReferenceData, Depends(get_reference)],
 ) -> SubmissionService:
-    return SubmissionService(TRSubmissionRepository(db), reference)
+    return SubmissionService(TRSubmissionRepository(db), reference,
+                             lab_timezone=request.app.state.settings.lab_timezone)
 
 
 Service = Annotated[SubmissionService, Depends(get_service)]

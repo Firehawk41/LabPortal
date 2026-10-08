@@ -1,5 +1,19 @@
 # slim-lab-portal — Claude Context
 
+> ## ⚠️ OSS ONLY — read first
+> This portal is a **portfolio demo** that attaches to the **open-source** SLIM repos only:
+> `slim-domain-oss`, `slim-report-engine-oss`, `slim-lims-oss` and their fictional demo data.
+> **Never connect it to PreciLab (or any real lab) production databases, shares or services.**
+> Enforced in code: `slim_lab_portal/oss_guard.py` refuses any database URL containing
+> "precilab" (no override) and any host other than localhost / 127.0.0.1 / `db` / `postgres`
+> unless listed in `PORTAL_ALLOWED_DB_HOSTS`. Every connection goes through `db.make_engine`;
+> `tests/test_oss_guard.py` fails if anything calls `create_engine` elsewhere. `.env` is read
+> from the current directory only. Do not weaken any of this.
+>
+> **Scope:** modular but narrow. Don't modify slim-domain / slim-report-engine / slim-lims yet —
+> the portal must fit them, not the other way round. Ideas worth having later go in the spec's
+> "Parked ideas" list (docs/SLIM_DOMAIN_V2.md §11) and get raised with the user, not built.
+
 ## What This Is
 
 The sample submission portal for the SLIM LIMS ecosystem (slim-domain, slim-report-engine,
@@ -46,7 +60,8 @@ Or `docker compose up --build` (portal + Postgres 16 on :8000).
 slim_lab_portal/
 ├── main.py          # create_app(settings, engine): middleware, routers, exception handlers, /health
 ├── config.py        # Settings from env (APP_ENV, SECRET_KEY, DATABASE_URL, ...)
-├── db.py            # Base (portal-owned tables only), make_engine, get_db dependency
+├── db.py            # Base (portal-owned tables only), make_engine (the only way to connect), get_db
+├── oss_guard.py     # OSS-ONLY guard: refuses "precilab" URLs and non-demo hosts (called by make_engine)
 ├── domain/          # Spec §3–4: enums.py, tr.py (TRSubmission, TRSample, ...), workflow.py (transitions)
 ├── models.py        # SQLAlchemy models: User + TR tables (tr_submissions, tr_samples, ...)
 ├── repositories.py  # TRSubmissionRepository: domain <-> rows, gapless TR numbers, stale-update check
@@ -100,6 +115,9 @@ docs/SLIM_DOMAIN_V2.md
   default 300 s; staff can force a reload on /admin). A failed refresh keeps the previous snapshot.
   SLIM analyses with no `analysis_catalog` row are never offered. `GET /api/reference` gives the
   form its choices (customers only for staff).
+- **OSS only:** see the banner at the top. `PORTAL_ALLOWED_DB_HOSTS` is for other *demo* hosts.
+- **Dates:** "today" means the lab's local date (`LAB_TIMEZONE`, default America/Chicago). Expected
+  arrival (optional, customer) can't be in the past; `date_received` (staff) can't be in the future.
 - **Demo data only:** dev, tests and the portfolio use the OSS repos' fictional data
   (`slim-report-engine-oss/demo/demo.py`). `scripts/seed_demo.py` never writes into SLIM tables
   that already hold data. Never point the portal at the lab's production database from here.
@@ -119,9 +137,6 @@ docs/SLIM_DOMAIN_V2.md
 - Hosting target: portfolio VPS running the whole ecosystem via Docker Compose. `render.yaml`
   keeps the old Render resource names so Render doesn't create a new empty database.
 
-## Backlog (carried over, still open)
+## Backlog
 
-- SRI hashes on CDN links / self-host CDN dependencies
-- File attachments (COAs, SDSs, protocols)
-- Email notifications (confirmation to customer, alert to lab) — out of scope until specced
-- Login rate limiting
+See "Parked ideas" in docs/SLIM_DOMAIN_V2.md §11.

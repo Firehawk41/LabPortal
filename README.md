@@ -15,6 +15,13 @@ can consume them directly — no Excel in between.
 > the SLIM ecosystem. The skeleton (auth, CSRF, security headers, migrations, tests) is in place;
 > the submission form and lab workflow are being ported. See `CLAUDE.md` for progress.
 
+## OSS only
+
+This is a portfolio module. It connects **only** to the open-source SLIM repos and their fictional
+demo data — never to a real lab's systems. `slim_lab_portal/oss_guard.py` enforces it: database URLs
+mentioning "precilab" are always refused, and only local/demo hosts are allowed unless explicitly
+listed in `PORTAL_ALLOWED_DB_HOSTS`.
+
 ## Tech stack
 
 | Layer | Technology |

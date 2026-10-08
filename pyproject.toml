@@ -19,6 +19,7 @@ dependencies = [
     "pydantic[email]>=2.6,<3.0",
     "python-dotenv>=1.0",
     "psycopg2-binary>=2.9",
+    "tzdata",  # zoneinfo data for LAB_TIMEZONE on slim container images
 ]
 
 [project.optional-dependencies]

@@ -32,6 +32,7 @@ from slim_lab_portal import slim_tables as t
 from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
+from slim_lab_portal.oss_guard import assert_oss_database
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OSS_DIR = REPO_ROOT.parent / "slim-report-engine-oss"
@@ -83,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     if _slim_tables_have_data(slim_engine):
         print("SLIM reference tables already hold data -- left untouched.")
     else:
+        assert_oss_database(slim_url)  # demo.seed() opens its own engine, outside make_engine
         demo = _load_oss_demo(args.oss_report_engine.resolve())
         if slim_engine.dialect.name == "postgresql":
             with slim_engine.begin() as conn:  # slim-domain's unique names are CITEXT on Postgres

@@ -129,6 +129,7 @@ class TRSubmission(_Frozen):
     invoice_to: tuple[EmailStr, ...]
     invoice_cc: tuple[EmailStr, ...] = ()
     samples: tuple[TRSample, ...]
+    expected_arrival_date: date | None = None  # customer's estimate; the receipt records the fact
     receipt: TRReceipt | None = None
     service_date_override: date | None = None
     status_history: tuple[TRStatusEvent, ...]
@@ -140,8 +141,18 @@ class TRSubmission(_Frozen):
             return None
         if self.service_date_override is not None:
             return self.service_date_override
-        slowest = max(sample.processing_time.days for sample in self.samples)
-        return add_working_days(self.receipt.date_received, slowest)
+        return add_working_days(self.receipt.date_received, self._slowest_days())
+
+    def _slowest_days(self) -> int:
+        return max(sample.processing_time.days for sample in self.samples)
+
+    @computed_field
+    @property
+    def estimated_service_date(self) -> date | None:
+        """Until the samples are received: expected arrival + the slowest sample's working days."""
+        if self.receipt is not None or self.expected_arrival_date is None:
+            return None
+        return add_working_days(self.expected_arrival_date, self._slowest_days())
 
     @computed_field
     @property

@@ -3,7 +3,9 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import find_dotenv, load_dotenv
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 _DEV_SECRET = "dev-secret-key-change-me"
 
@@ -19,6 +21,8 @@ class Settings:
     # SLIM's reference tables. Defaults to DATABASE_URL: one Postgres shared with the ecosystem.
     slim_database_url: str | None = None
     reference_cache_ttl_seconds: int = 300
+    # The lab's local time zone: "today" for receipt and expected-arrival dates.
+    lab_timezone: str = "America/Chicago"
 
     @property
     def is_production(self) -> bool:
@@ -39,7 +43,10 @@ def _database_url(raw: str) -> str:
 
 
 def load_settings() -> Settings:
-    load_dotenv(find_dotenv(usecwd=True))
+    # Only ./.env -- never search parent directories, which could pick up another system's settings.
+    local_env = Path.cwd() / ".env"
+    if local_env.is_file():
+        load_dotenv(local_env)
     env = os.environ.get("APP_ENV", "development").strip().lower()
     secret_key = os.environ.get("SECRET_KEY", "")
     if not secret_key:
@@ -55,4 +62,5 @@ def load_settings() -> Settings:
         max_body_bytes=int(os.environ.get("MAX_BODY_BYTES", 1024 * 1024)),
         slim_database_url=_database_url(os.environ["SLIM_DATABASE_URL"]) if os.environ.get("SLIM_DATABASE_URL") else None,
         reference_cache_ttl_seconds=int(os.environ.get("REFERENCE_CACHE_TTL_SECONDS", 300)),
+        lab_timezone=os.environ.get("LAB_TIMEZONE", "America/Chicago"),
     )

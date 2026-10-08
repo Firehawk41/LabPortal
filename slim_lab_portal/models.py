@@ -91,6 +91,7 @@ class TRSubmissionRow(Base):
     customer_phone: Mapped[str] = mapped_column(String(50))
     payment_method: Mapped[int] = mapped_column(Integer)
     po_number: Mapped[str] = mapped_column(String(100), default="")
+    expected_arrival_date: Mapped[date | None] = mapped_column(Date)
     date_received: Mapped[date | None] = mapped_column(Date)
     received_by: Mapped[str | None] = mapped_column(String(10))
     receipt_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

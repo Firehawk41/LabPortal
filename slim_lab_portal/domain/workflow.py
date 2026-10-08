@@ -35,11 +35,13 @@ def transition(
     note: str = "",
     date_received: date | None = None,
     received_by: str | None = None,
+    today: date | None = None,
 ) -> TRSubmission:
     """Returns a new TRSubmission with the status changed and the event appended.
 
     Moving to RECEIVED records the receipt and needs `date_received` and `received_by`
-    (technician initials).
+    (technician initials). Pass `today` (the lab's local date) to refuse a receipt dated in
+    the future — samples are received when they are physically in hand.
     """
     current = submission.status
     if to_status not in allowed_next_statuses(current, actor.type):
@@ -50,6 +52,8 @@ def transition(
     if to_status is TRStatus.RECEIVED:
         if date_received is None or not received_by:
             raise TransitionNotAllowed("receiving samples needs date_received and received_by")
+        if today is not None and date_received > today:
+            raise TransitionNotAllowed(f"date_received {date_received} is in the future (lab date is {today})")
         receipt = TRReceipt(date_received=date_received, received_by=received_by, recorded_at=at, recorded_by=actor)
     elif date_received is not None or received_by is not None:
         raise TransitionNotAllowed("date_received and received_by are only for receiving samples")

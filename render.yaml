@@ -1,3 +1,5 @@
+# OSS ONLY: Render's database host is not on the guard's default allow-list -- add it to
+# PORTAL_ALLOWED_DB_HOSTS (it must be a demo database; see slim_lab_portal/oss_guard.py).
 # Kept for the existing Render deployment. Resource names are unchanged on purpose:
 # renaming the database here would make Render create a new, empty one.
 databases:
