@@ -39,15 +39,17 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
 6. ⬜ (B) Screens: customer form (per-request-type fields, choices from /api/reference), staff list,
    receive, status changes, JSON view; admin customers/users/profiles. Portal only.
-7. ⏸ (C) Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS.
-   **ON HOLD — do not start.** The user wants more design on the demo's UX first; discuss before
-   any work here.
-8. ⏸ (D) Connect the other repos (report engine accepts a submission object, slim-lims "generate
-   report for TR", slim-domain adopts v2, status flows back). Modifies other repos — **needs the
-   user's explicit go-ahead.**
+7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
+   slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
+   repos — **needs the user's explicit go-ahead.**
+8. ⏸ (C) Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS.
+   **DEFERRED — do not start.** Waits until the other modules are ready to bolt in, so the demo
+   launches with several modules and can take one submission end to end: submission → receipt →
+   analysis/report → delivery → invoice.
 
-Agreed order: A → B, then pause for UX design before C; D only when approved. The user is
-token-constrained: work in small, focused steps and keep replies short.
+Agreed order: backend is essentially done (except A). Next A, then B (UX + frontend, designed with
+the user), then D when approved; C last. The user is token-constrained: small, focused steps,
+short replies.
 
 ## How to Run
 
