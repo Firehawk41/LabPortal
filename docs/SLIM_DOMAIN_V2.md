@@ -463,4 +463,7 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
 - Expected arrival *time* for Same Day / Call-in RUSH; making the date required for rush samples.
 - Staff "incoming" (expected today/this week) and "overdue" (expected passed, not received) views.
 - Hash-chained audit (slim-domain `infrastructure/audit.py`) over the TR tables.
+- **Repeat a previous request**: copy TR00042 into a new form and change only the sample IDs — the
+  improvement over Excel for customers who send the same panel regularly.
+- Upload sample IDs from a CSV/XLSX column (beyond pasting).
 - Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.

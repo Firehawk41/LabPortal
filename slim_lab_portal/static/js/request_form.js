@@ -1,5 +1,7 @@
 // New testing request form. Choices come from GET /api/reference (the SLIM reference cache);
 // the form posts JSON to POST /api/submissions and shows the server's field errors.
+// Samples are a spreadsheet-like table: paste a column of IDs to add rows, Ctrl+D fills down,
+// new rows copy the row above, and analyses are ticked once for all selected rows.
 // No inline scripts (CSP): this file is loaded with <script src> and wires everything up.
 (() => {
   "use strict";
@@ -9,13 +11,18 @@
   const isStaff = form.dataset.staff === "1";
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const $ = (id) => document.getElementById(id);
-  const samplesBox = $("samples");
-  const template = $("sample-template");
+  const tbody = $("samples");
   const errorBox = $("form-error");
 
   let ref = null;           // /api/reference payload
   let requestType = null;   // RequestType value (1 Chemical, 2 Water, 3 Wafer)
-  let sampleCounter = 0;    // monotonic, for unique input names
+  let samples = [];         // [{key, sample_name, chemical_id, wafer_size, reporting_unit, processing_time,
+                            //   requested_time, additional_element_ids, additional_notes, analyses: Set}]
+  const selected = new Set();  // keys of rows the analysis panel edits
+  let nextKey = 1;
+
+  const TEXT_FIELDS = ["sample_name", "chemical_id", "wafer_size", "reporting_unit", "processing_time",
+                       "requested_time", "additional_element_ids", "additional_notes"];
 
   // ------------------------------------------------------------ helpers
 
@@ -28,11 +35,14 @@
   const option = (value, label) => el("option", { value: String(value) }, label);
   const fillSelect = (select, items, placeholder) => {
     select.replaceChildren();
-    if (placeholder) select.append(option("", placeholder));
+    if (placeholder !== undefined) select.append(option("", placeholder));
     items.forEach(([value, label]) => select.append(option(value, label)));
   };
   const splitList = (text) => text.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+  const splitLines = (text) => text.split(/\r?\n/).map((s) => s.split("\t")[0].trim()).filter(Boolean);
   const typeInfo = () => ref.request_types.find((rt) => rt.value === requestType);
+  const analysisName = (id) => (typeInfo().analyses.find((a) => a.id === id) || {}).name || `#${id}`;
+  const timeLimited = (s) => Number(s.processing_time) === ref.processing_time_requiring_requested_time;
 
   function radioRow(container, name, items, onChange) {
     container.replaceChildren();
@@ -46,54 +56,102 @@
     });
   }
 
-  // ------------------------------------------------------------ samples
+  // ------------------------------------------------------------ sample state
 
-  function addSample(copyFrom) {
-    sampleCounter += 1;
-    const card = template.content.firstElementChild.cloneNode(true);
-    card.dataset.key = String(sampleCounter);
-    card.querySelectorAll("[data-f]").forEach((field) => { field.name = `${field.dataset.f}-${sampleCounter}`; });
-    samplesBox.append(card);
-    renderSampleForType(card);
-    if (copyFrom) copySample(copyFrom, card);
-    renumber();
-    return card;
+  function newSample(name = "") {
+    const above = samples[samples.length - 1];
+    const sample = { key: nextKey++, sample_name: name, analyses: new Set() };
+    TEXT_FIELDS.slice(1).forEach((f) => { sample[f] = above ? above[f] : ""; });
+    if (above) sample.analyses = new Set(above.analyses);  // new rows copy the row above
+    samples.push(sample);
+    selected.add(sample.key);
+    return sample;
   }
 
-  function copySample(from, to) {
-    ["chemical_id", "wafer_size", "reporting_unit", "processing_time", "requested_time",
-     "additional_element_ids", "additional_notes"].forEach((f) => {
-      to.querySelector(`[data-f="${f}"]`).value = from.querySelector(`[data-f="${f}"]`).value;
-    });
-    const checked = new Set([...from.querySelectorAll(".analyses input:checked")].map((c) => c.value));
-    to.querySelectorAll(".analyses input").forEach((c) => { c.checked = checked.has(c.value); });
-    toggleRequestedTime(to);
+  function addSamples(names) {
+    // Fill an empty last row first, so pasting into a fresh form doesn't leave a blank row.
+    const last = samples[samples.length - 1];
+    let start = 0;
+    if (last && !last.sample_name && names.length) { last.sample_name = names[0]; start = 1; }
+    names.slice(start).forEach((n) => newSample(n));
+    render();
   }
 
-  function renumber() {
-    [...samplesBox.children].forEach((card, i) => {
-      card.querySelector(".sample-title").textContent = `Sample ${i + 1}`;
-      card.querySelector('[data-action="remove"]').disabled = samplesBox.children.length === 1;
-    });
+  // ------------------------------------------------------------ table
+
+  function cell(sample, field, control) {
+    control.dataset.f = field;
+    control.dataset.key = String(sample.key);
+    control.value = sample[field] ?? "";
+    control.setAttribute("aria-label", field.replace(/_/g, " "));
+    const td = el("td", { "data-f": field });
+    td.append(control);
+    return td;
   }
 
-  function renderSampleForType(card) {
+  function render() {
     const info = typeInfo();
-    card.querySelectorAll("[data-only]").forEach((node) => {
-      node.classList.toggle("hidden", Number(node.dataset.only) !== requestType);
+    tbody.replaceChildren();
+    samples.forEach((s, i) => {
+      const tr = el("tr", { "data-key": String(s.key) });
+      const pick = el("input", { type: "checkbox", "aria-label": `Select sample ${i + 1}` });
+      pick.checked = selected.has(s.key);
+      pick.dataset.select = String(s.key);
+      const tdPick = el("td"); tdPick.append(pick); tr.append(tdPick);
+      tr.append(el("td", { class: "row-no" }, String(i + 1)));
+      tr.append(cell(s, "sample_name", el("input", { maxlength: "100", placeholder: "Sample ID" })));
+      if (requestType === 1) {
+        const sel = el("select"); fillSelect(sel, ref.chemicals.map((c) => [c.id, c.name]), "Choose…");
+        tr.append(cell(s, "chemical_id", sel));
+      }
+      if (requestType === 3) {
+        const size = el("select"); fillSelect(size, ref.wafer_sizes.map((w) => [w.value, w.label]), "Choose…");
+        const unit = el("select"); fillSelect(unit, ref.reporting_units.map((u) => [u.value, u.label]), "Choose…");
+        tr.append(cell(s, "wafer_size", size), cell(s, "reporting_unit", unit));
+      }
+      const pt = el("select"); fillSelect(pt, info.processing_times.map((p) => [p.value, p.label]), "Choose…");
+      tr.append(cell(s, "processing_time", pt));
+      const time = el("input", { type: "time" });
+      const tdTime = cell(s, "requested_time", time);
+      time.disabled = !timeLimited(s);
+      tr.append(tdTime);
+      const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" },
+        [...s.analyses].map(analysisName).join(", ") || "—");
+      tr.append(summary);
+      tr.append(cell(s, "additional_element_ids", el("input", { placeholder: "e.g. Fe, Li", size: "8" })));
+      tr.append(cell(s, "additional_notes", el("input", { maxlength: "2000", placeholder: "optional" })));
+      const remove = el("button", { type: "button", class: "btn btn--secondary btn--small", "data-remove": String(s.key),
+                                    "aria-label": `Remove sample ${i + 1}` }, "✕");
+      remove.disabled = samples.length === 1;
+      const tdRemove = el("td"); tdRemove.append(remove); tr.append(tdRemove);
+      tbody.append(tr);
     });
-    fillSelect(card.querySelector('[data-f="chemical_id"]'), ref.chemicals.map((c) => [c.id, c.name]), "Choose…");
-    fillSelect(card.querySelector('[data-f="wafer_size"]'), ref.wafer_sizes.map((w) => [w.value, w.label]), "Choose…");
-    fillSelect(card.querySelector('[data-f="reporting_unit"]'), ref.reporting_units.map((u) => [u.value, u.label]), "Choose…");
-    const pt = card.querySelector('[data-f="processing_time"]');
-    fillSelect(pt, info.processing_times.map((p) => [p.value, p.label]), "Choose…");
-    pt.onchange = () => toggleRequestedTime(card);
-    toggleRequestedTime(card);
+    document.querySelectorAll("#sample-table [data-only]").forEach((th) => {
+      th.classList.toggle("hidden", Number(th.dataset.only) !== requestType);
+    });
+    $("select-all").checked = samples.length > 0 && samples.every((s) => selected.has(s.key));
+    renderAnalysisPanel();
+  }
 
-    const groups = card.querySelector(".analysis-groups");
+  function renderAnalysisPanel() {
+    const chosen = samples.filter((s) => selected.has(s.key));
+    $("analysis-legend").textContent = chosen.length === samples.length
+      ? `Analyses — applied to all ${samples.length} sample${samples.length === 1 ? "" : "s"}`
+      : `Analyses — applied to ${chosen.length} selected sample${chosen.length === 1 ? "" : "s"}`;
+    document.querySelectorAll("#analysis-groups input").forEach((box) => {
+      const id = Number(box.value);
+      const count = chosen.filter((s) => s.analyses.has(id)).length;
+      box.checked = chosen.length > 0 && count === chosen.length;
+      box.indeterminate = count > 0 && count < chosen.length;
+      box.disabled = chosen.length === 0;
+    });
+  }
+
+  function buildAnalysisPanel() {
+    const groups = $("analysis-groups");
     groups.replaceChildren();
     const byGroup = new Map();
-    info.analyses.forEach((a) => {
+    typeInfo().analyses.forEach((a) => {
       if (!byGroup.has(a.group)) byGroup.set(a.group, []);
       byGroup.get(a.group).push(a);
     });
@@ -101,7 +159,7 @@
       const box = el("div", { class: "analysis-group" });
       box.append(el("h4", {}, group || "Other"));
       items.forEach((a) => {
-        const id = `a-${card.dataset.key}-${a.id}`;
+        const id = `analysis-${a.id}`;
         const input = el("input", { type: "checkbox", id, value: String(a.id) });
         const lab = el("label", { for: id, class: "check" });
         if (a.description && a.description !== a.name) lab.title = a.description;
@@ -112,35 +170,106 @@
     });
   }
 
-  function toggleRequestedTime(card) {
-    const value = Number(card.querySelector('[data-f="processing_time"]').value);
-    const wrap = card.querySelector('[data-f-wrap="requested_time"]');
-    const show = value === ref.processing_time_requiring_requested_time;
-    wrap.classList.toggle("hidden", !show);
-    if (!show) card.querySelector('[data-f="requested_time"]').value = "";
-  }
-
-  samplesBox.addEventListener("click", (event) => {
-    const action = event.target.dataset.action;
-    const card = event.target.closest(".sample-card");
-    if (action === "remove" && samplesBox.children.length > 1) { card.remove(); renumber(); }
-    if (action === "copy") addSample(card).querySelector('[data-f="sample_name"]').focus();
+  $("analysis-groups").addEventListener("change", (event) => {
+    const id = Number(event.target.value);
+    samples.filter((s) => selected.has(s.key)).forEach((s) => {
+      if (event.target.checked) s.analyses.add(id); else s.analyses.delete(id);
+    });
+    render();
   });
-  $("add-sample").addEventListener("click", () => addSample().querySelector('[data-f="sample_name"]').focus());
+
+  tbody.addEventListener("input", (event) => {
+    const { f, key } = event.target.dataset;
+    if (!f) return;
+    const sample = samples.find((s) => String(s.key) === key);
+    sample[f] = event.target.value;
+    if (f === "processing_time") {
+      if (!timeLimited(sample)) sample.requested_time = "";
+      const time = event.target.closest("tr").querySelector('[data-f="requested_time"] input');
+      time.disabled = !timeLimited(sample);
+      time.value = sample.requested_time;
+    }
+  });
+  tbody.addEventListener("change", (event) => {
+    if (event.target.dataset.select) {
+      const key = Number(event.target.dataset.select);
+      if (event.target.checked) selected.add(key); else selected.delete(key);
+      $("select-all").checked = samples.every((s) => selected.has(s.key));
+      renderAnalysisPanel();
+    }
+  });
+  tbody.addEventListener("click", (event) => {
+    const key = event.target.dataset.remove;
+    if (!key || samples.length === 1) return;
+    samples = samples.filter((s) => String(s.key) !== key);
+    selected.delete(Number(key));
+    render();
+  });
+  // Paste a column of IDs into a Sample ID cell: one row per line, starting at that row.
+  tbody.addEventListener("paste", (event) => {
+    if (event.target.dataset.f !== "sample_name") return;
+    const names = splitLines(event.clipboardData.getData("text"));
+    if (names.length < 2) return;
+    event.preventDefault();
+    const index = samples.findIndex((s) => String(s.key) === event.target.dataset.key);
+    names.forEach((name, i) => {
+      if (index + i < samples.length) samples[index + i].sample_name = name;
+      else newSample(name);
+    });
+    render();
+  });
+  // Ctrl+D (Cmd+D on a Mac): copy this cell's value from the row above, like Excel's fill down.
+  tbody.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "d") return;
+    const { f, key } = event.target.dataset;
+    if (!f) return;
+    event.preventDefault();
+    const index = samples.findIndex((s) => String(s.key) === key);
+    if (index < 1) return;
+    samples[index][f] = samples[index - 1][f];
+    if (f === "processing_time" && !timeLimited(samples[index])) samples[index].requested_time = "";
+    render();
+    const again = tbody.querySelector(`[data-key="${key}"][data-f="${f}"]`);
+    if (again) again.focus();
+  });
+
+  $("select-all").addEventListener("change", (event) => {
+    samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
+    render();
+  });
+  $("add-sample").addEventListener("click", () => {
+    newSample();
+    render();
+    tbody.lastElementChild.querySelector('[data-f="sample_name"]').focus();
+  });
+  $("add-pasted").addEventListener("click", () => {
+    const names = splitLines($("paste-ids").value);
+    if (!names.length) return;
+    addSamples(names);
+    $("paste-ids").value = "";
+  });
 
   function setRequestType(value) {
+    const changed = requestType !== null && requestType !== value;
     requestType = value;
     $("samples-section").hidden = false;
     $("submit-button").disabled = false;
-    if (!samplesBox.children.length) addSample();
-    else [...samplesBox.children].forEach(renderSampleForType);
+    const allowedTimes = new Set(typeInfo().processing_times.map((p) => String(p.value)));
+    const allowedAnalyses = new Set(typeInfo().analyses.map((a) => a.id));
+    samples.forEach((s) => {   // keep what still applies to the new type
+      if (!allowedTimes.has(String(s.processing_time))) s.processing_time = "";
+      s.analyses = new Set([...s.analyses].filter((id) => allowedAnalyses.has(id)));
+      if (changed) { s.chemical_id = ""; s.wafer_size = ""; s.reporting_unit = ""; }
+    });
+    if (!samples.length) newSample();
+    buildAnalysisPanel();
+    render();
   }
 
   // ------------------------------------------------------------ customer, payment, locations
 
   function setLocations(locations) {
-    const field = $("location-field");
-    field.classList.toggle("hidden", !locations.length);
+    $("location-field").classList.toggle("hidden", !locations.length);
     fillSelect($("location"), locations.map((l) => [l, l]), locations.length ? "Choose a site…" : "");
   }
 
@@ -159,7 +288,7 @@
     if (!last) return;
     ["customer_contact", "customer_phone"].forEach((f) => { $(f).value = last[f]; });
     ["results_to", "results_cc", "invoice_to", "invoice_cc"].forEach((f) => { $(f).value = last[f].join(", "); });
-    const pay = document.querySelector(`input[name="payment_method"][value="${last.payment_method}"]`);
+    const pay = $(`payment_method-${last.payment_method}`);
     if (pay) { pay.checked = true; setPayment(last.payment_method); }
     $("po_number").value = last.po_number;
     if (last.location) $("location").value = last.location;
@@ -169,44 +298,42 @@
 
   function collect() {
     const problems = [];
-    const intOrNull = (v) => (v === "" ? null : Number(v));
+    const intOrNull = (v) => (v === "" || v === undefined || v === null ? null : Number(v));
     const symbols = new Map(ref.elements.map((e) => [e.symbol.toLowerCase(), e.id]));
-    const samples = [...samplesBox.children].map((card, i) => {
-      const f = (name) => card.querySelector(`[data-f="${name}"]`).value.trim();
-      const elementIds = splitList(f("additional_element_ids")).map((sym) => {
-        const id = symbols.get(sym.toLowerCase());
-        if (id === undefined) problems.push(`Sample ${i + 1}: "${sym}" is not an element symbol.`);
-        return id;
-      });
-      const sample = {
-        sample_name: f("sample_name"),
-        processing_time: intOrNull(f("processing_time")),
-        requested_time: f("requested_time") || null,
-        additional_notes: f("additional_notes"),
-        analysis_ids: [...card.querySelectorAll(".analyses input:checked")].map((c) => Number(c.value)),
-        additional_element_ids: elementIds.filter((id) => id !== undefined),
-      };
-      if (requestType === 1) sample.chemical_id = intOrNull(f("chemical_id"));
-      if (requestType === 3) {
-        sample.wafer_size = intOrNull(f("wafer_size"));
-        sample.reporting_unit = intOrNull(f("reporting_unit"));
-      }
-      return sample;
-    });
-    const payment = document.querySelector('input[name="payment_method"]:checked');
     const body = {
       request_type: requestType,
       location: $("location").value,
       expected_arrival_date: $("expected_arrival_date").value || null,
       customer_contact: $("customer_contact").value.trim(),
       customer_phone: $("customer_phone").value.trim(),
-      payment_method: payment ? Number(payment.value) : null,
+      payment_method: intOrNull((document.querySelector('input[name="payment_method"]:checked') || {}).value),
       po_number: $("po_number").value.trim(),
       results_to: splitList($("results_to").value),
       results_cc: splitList($("results_cc").value),
       invoice_to: splitList($("invoice_to").value),
       invoice_cc: splitList($("invoice_cc").value),
-      samples,
+      samples: samples.map((s, i) => {
+        const elementIds = splitList(s.additional_element_ids || "").map((sym) => {
+          const id = symbols.get(sym.toLowerCase());
+          if (id === undefined) problems.push({ text: `Sample ${i + 1}: "${sym}" is not an element symbol.`,
+                                                sample: i, field: "additional_element_ids" });
+          return id;
+        });
+        const sample = {
+          sample_name: (s.sample_name || "").trim(),
+          processing_time: intOrNull(s.processing_time),
+          requested_time: timeLimited(s) ? s.requested_time || null : null,
+          additional_notes: (s.additional_notes || "").trim(),
+          analysis_ids: [...s.analyses],
+          additional_element_ids: elementIds.filter((id) => id !== undefined),
+        };
+        if (requestType === 1) sample.chemical_id = intOrNull(s.chemical_id);
+        if (requestType === 3) {
+          sample.wafer_size = intOrNull(s.wafer_size);
+          sample.reporting_unit = intOrNull(s.reporting_unit);
+        }
+        return sample;
+      }),
     };
     if (isStaff) body.customer_id = intOrNull($("customer_id").value);
     return { body, problems };
@@ -218,17 +345,16 @@
     results_cc: "Results cc", invoice_to: "Invoice to", invoice_cc: "Invoice cc",
     expected_arrival_date: "Expected arrival", sample_name: "Sample ID", chemical_id: "Chemical",
     processing_time: "Processing time", requested_time: "Report-by time", analysis_ids: "Analyses",
-    additional_element_ids: "Additional elements", wafer_size: "Wafer size", reporting_unit: "Report results in",
+    additional_element_ids: "Extra elements", wafer_size: "Wafer size", reporting_unit: "Units",
     additional_notes: "Notes", samples: "Samples",
   };
 
   // Plain-language versions of the validator's most common messages.
   function friendly(msg) {
     const m = msg.replace(/^Value error, /, "");
-    if (/^Field required$/.test(m) || /valid integer/.test(m) || /^Input should be .*(not|got) None/i.test(m)) return "is required";
+    if (/^Field required$/.test(m) || /valid integer/.test(m) || /at least 1 character/.test(m)) return "is required";
     if (/at least 1 item/.test(m)) return "needs at least one entry";
     if (/valid email address/.test(m)) return "contains an address that isn't a valid email";
-    if (/at least 1 character/.test(m)) return "is required";
     return m;
   }
 
@@ -249,8 +375,8 @@
       list.append(el("li", {}, text));
       let target = null;
       if (sample !== undefined) {
-        const card = samplesBox.children[sample];
-        target = card && (field ? card.querySelector(`[data-f="${field}"]`) : card);
+        const row = tbody.children[sample];
+        target = row && (field ? row.querySelector(`td[data-f="${field}"]`) : row);
       } else if (field) {
         target = form.querySelector(`[data-path="${field}"]`);
       }
@@ -264,7 +390,7 @@
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const { body, problems } = collect();
-    if (problems.length) { showErrors(problems.map((text) => ({ text }))); return; }
+    if (problems.length) { showErrors(problems); return; }
     const button = $("submit-button");
     button.disabled = true;
     try {
