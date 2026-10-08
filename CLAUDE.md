@@ -39,8 +39,11 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
    `slim_lab_portal/bridge.py` (`to_slim_v1`, received TRs only); `tests/test_bridge.py` renders
    Chemical/Water/Wafer reports with the engine's own writer (skipped without the OSS packages).
-6. ⬜ (B) Screens: customer form (per-request-type fields, choices from /api/reference), staff list,
+6. ✅ (B) Screens (first pass, awaiting the user's critique): customer form (per-request-type fields, choices from /api/reference), staff list,
    receive, status changes, JSON view; admin customers/users/profiles. Portal only.
+   Done: routes.py pages, templates/requests/*, admin/home + users, static/js/request_form.js (vanilla JS,
+   no jQuery/Select2/Tagify), static/css/portal.css, e2e/request_flow.js. Not done: customer profiles
+   (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request instead.
 7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
    slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
    repos — **needs the user's explicit go-ahead.**
@@ -90,12 +93,12 @@ slim_lab_portal/
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
-├── routes.py        # Page routes: / , /admin, /api/me (placeholders until steps 5–6)
+├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
 ├── cli.py           # create-staff, create-customer-user, sync-analysis-catalog
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
-├── templates/       # base, login, index, error, admin/home
-└── static/          # css/style.css, css/admin.css (.admin-theme), js/script.js (old form JS, to port)
+├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
+└── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js
 scripts/seed_demo.py # Demo DB only: runs slim-report-engine-oss demo seed() if SLIM tables are empty, syncs catalog
 tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
 docs/SLIM_DOMAIN_V2.md

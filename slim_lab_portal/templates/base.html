@@ -7,6 +7,7 @@
   <title>{% block title %}YourLab{% endblock %}</title>
 
   <link href="{{ url_for('static', path='css/style.css') }}" rel="stylesheet" />
+  <link href="{{ url_for('static', path='css/portal.css') }}" rel="stylesheet" />
   {% if current_user and current_user.is_staff %}
     <link href="{{ url_for('static', path='css/admin.css') }}" rel="stylesheet" />
   {% endif %}
@@ -20,9 +21,12 @@
         {% block nav %}
           {% if current_user %}
             {% if current_user.is_staff %}
-              <a href="{{ url_for('admin_home') }}">Admin</a>
+              <a href="{{ url_for('admin_home') }}">Requests</a>
+              <a href="{{ url_for('new_request') }}">New request</a>
+              <a href="{{ url_for('admin_users') }}">Users</a>
             {% else %}
-              <a href="{{ url_for('index') }}">Request Testing</a>
+              <a href="{{ url_for('index') }}">My requests</a>
+              <a href="{{ url_for('new_request') }}">New request</a>
             {% endif %}
             <form method="post" action="{{ url_for('logout') }}" class="nav-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -48,5 +52,6 @@
       <p>&copy; YourLab. All rights reserved.</p>
     </div>
   </footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -17,7 +17,7 @@ def test_staff_login_lands_on_admin(client, staff_user):
     response = login(client, "staff@lab.example")
     assert response.status_code == 303
     assert client.get("/", follow_redirects=False).headers["location"] == "/admin"
-    assert "JM" in client.get("/admin").text
+    assert "Testing requests" in client.get("/admin").text
 
 
 def test_email_is_case_insensitive(client, staff_user):
@@ -28,7 +28,7 @@ def test_customer_login_sees_form_page(client, customer_user):
     login(client, "jane@acme.example")
     response = client.get("/")
     assert response.status_code == 200
-    assert "Request Testing" in response.text
+    assert "My testing requests" in response.text
 
 
 def test_wrong_password_is_rejected(client, staff_user):
