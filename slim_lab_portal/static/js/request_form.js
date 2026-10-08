@@ -1,7 +1,7 @@
 // New testing request form. Choices come from GET /api/reference (the SLIM reference cache);
 // the form posts JSON to POST /api/submissions and shows the server's field errors.
 // Samples are a spreadsheet-like table: paste a column of IDs to add rows, Ctrl+D fills down,
-// new rows copy the row above, and analyses are ticked once for all selected rows.
+// new rows copy the row above, and analyses are chosen for every sample or one sample at a time.
 // No inline scripts (CSP): this file is loaded with <script src> and wires everything up.
 (() => {
   "use strict";
@@ -18,7 +18,9 @@
   let requestType = null;   // RequestType value (1 Chemical, 2 Water, 3 Wafer)
   let samples = [];         // [{key, sample_name, chemical_id, wafer_size, reporting_unit, processing_time,
                             //   requested_time, additional_element_ids, additional_notes, analyses: Set}]
-  const selected = new Set();  // keys of rows the analysis panel edits
+  let analysisMode = "all";   // "all": the panel edits every sample; "one": it edits `currentKey` only
+  let currentKey = null;
+  const editedSamples = () => (analysisMode === "all" ? samples : samples.filter((s) => s.key === currentKey));
   let nextKey = 1;
 
   const TEXT_FIELDS = ["sample_name", "chemical_id", "wafer_size", "reporting_unit", "processing_time",
@@ -64,7 +66,6 @@
     TEXT_FIELDS.slice(1).forEach((f) => { sample[f] = above ? above[f] : ""; });
     if (above) sample.analyses = new Set(above.analyses);  // new rows copy the row above
     samples.push(sample);
-    selected.add(sample.key);
     return sample;
   }
 
@@ -94,10 +95,6 @@
     tbody.replaceChildren();
     samples.forEach((s, i) => {
       const tr = el("tr", { "data-key": String(s.key) });
-      const pick = el("input", { type: "checkbox", "aria-label": `Select sample ${i + 1}` });
-      pick.checked = selected.has(s.key);
-      pick.dataset.select = String(s.key);
-      const tdPick = el("td"); tdPick.append(pick); tr.append(tdPick);
       tr.append(el("td", { class: "row-no" }, String(i + 1)));
       tr.append(cell(s, "sample_name", el("input", { maxlength: "100", placeholder: "Sample ID" })));
       if (requestType === 1) {
@@ -117,12 +114,12 @@
       tr.append(tdTime);
       // Clicking a row's analyses edits that sample alone.
       const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" });
-      const edit = el("button", { type: "button", class: "link-button", "data-edit": String(s.key),
-                                  title: "Edit this sample's analyses" },
-                      [...s.analyses].map(analysisName).join(", ") || "Choose analyses");
+      const edit = el("button", { type: "button", class: "analysis-chip", "data-edit": String(s.key),
+                                  title: "Choose this sample's analyses" },
+                      `✎ ${[...s.analyses].map(analysisName).join(", ") || "Choose analyses"}`);
       summary.append(edit);
       tr.append(summary);
-      if (selected.has(s.key) && selected.size < samples.length) tr.classList.add("is-selected");
+      if (analysisMode === "one" && s.key === currentKey) tr.classList.add("is-selected");
       tr.append(cell(s, "additional_element_ids", el("input", { placeholder: "e.g. Fe, Li", size: "8" })));
       tr.append(cell(s, "additional_notes", el("input", { maxlength: "2000", placeholder: "optional" })));
       const remove = el("button", { type: "button", class: "btn btn--secondary btn--small", "data-remove": String(s.key),
@@ -134,28 +131,39 @@
     document.querySelectorAll("#sample-table [data-only]").forEach((th) => {
       th.classList.toggle("hidden", Number(th.dataset.only) !== requestType);
     });
-    $("select-all").checked = samples.length > 0 && samples.every((s) => selected.has(s.key));
     renderAnalysisPanel();
   }
 
   function renderAnalysisPanel() {
-    const chosen = samples.filter((s) => selected.has(s.key));
-    const all = chosen.length === samples.length;
-    let legend;
-    if (all) legend = `Analyses for all ${samples.length} sample${samples.length === 1 ? "" : "s"}`;
-    else if (chosen.length === 1) {
-      const i = samples.indexOf(chosen[0]);
-      legend = `Analyses for sample ${i + 1}${chosen[0].sample_name ? ` (${chosen[0].sample_name})` : ""} only`;
-    } else legend = `Analyses for ${chosen.length} selected samples`;
-    $("analysis-legend").textContent = legend;
-    $("select-all-samples").hidden = all;
+    if (analysisMode === "one" && !samples.some((s) => s.key === currentKey)) currentKey = samples[0].key;
+    const chosen = editedSamples();
+    $("sample-stepper").hidden = analysisMode !== "one";
+    if (analysisMode === "one") {
+      const index = samples.findIndex((s) => s.key === currentKey);
+      fillSelect($("current-sample"), samples.map((s, i) =>
+        [s.key, `Sample ${i + 1} of ${samples.length}${s.sample_name ? ` · ${s.sample_name}` : ""}`]));
+      $("current-sample").value = String(currentKey);
+      $("prev-sample").disabled = index === 0;
+      $("next-sample").disabled = index === samples.length - 1;
+    }
+    const differ = analysisMode === "all" && samples.some((s) =>
+      s.analyses.size !== samples[0].analyses.size || [...s.analyses].some((id) => !samples[0].analyses.has(id)));
+    $("analysis-note").textContent = differ
+      ? "Your samples have different analyses (shown as partly ticked). Ticking here changes every sample."
+      : "";
     document.querySelectorAll("#analysis-groups input").forEach((box) => {
       const id = Number(box.value);
       const count = chosen.filter((s) => s.analyses.has(id)).length;
       box.checked = chosen.length > 0 && count === chosen.length;
       box.indeterminate = count > 0 && count < chosen.length;
-      box.disabled = chosen.length === 0;
     });
+  }
+
+  function setAnalysisMode(mode, key) {
+    analysisMode = mode;
+    document.querySelector(`input[name="analysis_mode"][value="${mode}"]`).checked = true;
+    if (mode === "one") currentKey = key ?? currentKey ?? samples[0].key;
+    render();
   }
 
   function buildAnalysisPanel() {
@@ -183,7 +191,7 @@
 
   $("analysis-groups").addEventListener("change", (event) => {
     const id = Number(event.target.value);
-    samples.filter((s) => selected.has(s.key)).forEach((s) => {
+    editedSamples().forEach((s) => {
       if (event.target.checked) s.analyses.add(id); else s.analyses.delete(id);
     });
     render();
@@ -201,26 +209,16 @@
       time.value = sample.requested_time;
     }
   });
-  tbody.addEventListener("change", (event) => {
-    if (event.target.dataset.select) {
-      const key = Number(event.target.dataset.select);
-      if (event.target.checked) selected.add(key); else selected.delete(key);
-      $("select-all").checked = samples.every((s) => selected.has(s.key));
-      renderAnalysisPanel();
-    }
-  });
   tbody.addEventListener("click", (event) => {
-    if (event.target.dataset.edit) {
-      selected.clear();
-      selected.add(Number(event.target.dataset.edit));
-      render();
+    const editKey = event.target.closest("[data-edit]")?.dataset.edit;
+    if (editKey) {
+      setAnalysisMode("one", Number(editKey));
       $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const key = event.target.dataset.remove;
     if (!key || samples.length === 1) return;
     samples = samples.filter((s) => String(s.key) !== key);
-    selected.delete(Number(key));
     render();
   });
   // Paste a column of IDs into a Sample ID cell: one row per line, starting at that row.
@@ -251,14 +249,16 @@
     if (again) again.focus();
   });
 
-  $("select-all").addEventListener("change", (event) => {
-    samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
-    render();
+  document.querySelectorAll('input[name="analysis_mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => setAnalysisMode(radio.value));
   });
-  $("select-all-samples").addEventListener("click", () => {
-    samples.forEach((s) => selected.add(s.key));
-    render();
-  });
+  $("current-sample").addEventListener("change", (event) => setAnalysisMode("one", Number(event.target.value)));
+  const step = (delta) => {
+    const index = samples.findIndex((s) => s.key === currentKey) + delta;
+    if (index >= 0 && index < samples.length) setAnalysisMode("one", samples[index].key);
+  };
+  $("prev-sample").addEventListener("click", () => step(-1));
+  $("next-sample").addEventListener("click", () => step(1));
   $("add-sample").addEventListener("click", () => {
     newSample();
     render();

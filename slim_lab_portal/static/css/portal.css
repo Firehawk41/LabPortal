@@ -101,3 +101,16 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
   color: var(--color-primary); text-decoration: underline dotted; }
 .sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.10); }
 #select-all-samples { margin-bottom: 0.5em; }
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75em; margin: 0.25em 0 0.75em; }
+@media (max-width: 640px) { .mode-switch { grid-template-columns: 1fr; } }
+.mode-option { display: flex; gap: 0.6em; align-items: flex-start; padding: 0.6em 0.8em; cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); font-size: 0.9em; }
+.mode-option:has(input:checked) { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
+.sample-stepper { display: flex; gap: 0.5em; align-items: center; margin-bottom: 0.5em; }
+.sample-stepper label { display: flex; gap: 0.5em; align-items: center; font-weight: 600; }
+.sample-stepper select { font: inherit; padding: 0.25em 0.4em; }
+.analysis-chip { font: inherit; font-size: 0.95em; text-align: left; cursor: pointer; width: 100%;
+  padding: 0.25em 0.45em; border: 1px dashed var(--color-border); border-radius: 3px;
+  background: transparent; color: var(--color-text); }
+.analysis-chip:hover, .analysis-chip:focus { border-style: solid; border-color: var(--color-primary); }
+.sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.12); }

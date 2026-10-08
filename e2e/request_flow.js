@@ -26,10 +26,9 @@ const BASE = process.env.PORTAL_URL || 'http://127.0.0.1:8000';
   await page.click('#add-pasted');
   console.log('rows:', await page.locator('#samples tr').count());
   // change one sample: deselect all, select row 10, add TOC? (Chemical) -> add 4 Anions to row 10 only
-  await page.uncheck('#select-all');
-  await page.locator('#samples tr').nth(9).locator('input[type=checkbox]').check();
+  await page.locator('#samples tr').nth(9).locator('.analysis-chip').click();   // edit sample 10 alone
   await page.getByLabel('4 Anions', { exact: true }).check();
-  await page.check('#select-all');
+  await page.check('input[name=analysis_mode][value=all]');
   console.log('4 Anions state (all selected):', await page.getByLabel('4 Anions', { exact: true }).evaluate(b => b.indeterminate ? 'mixed' : b.checked));
   // Ctrl+D: row 3 notes
   await page.locator('#samples tr').nth(1).locator(':is(input,select)[data-f=additional_notes]').fill('keep cold');

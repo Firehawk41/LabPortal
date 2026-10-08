@@ -52,13 +52,11 @@
       <h2>Samples</h2>
       <p class="hint">Works like a spreadsheet: paste a column of sample IDs from Excel to add one row per ID,
         and press <kbd>Ctrl</kbd>+<kbd>D</kbd> in a cell to copy the value from the row above. New rows copy the
-        row above, so set up the first sample, then paste the rest of the IDs. To give one sample different
-        analyses, click its entry in the Analyses column.</p>
+        row above, so set up the first sample, then paste the rest of the IDs.</p>
       <div class="table-wrap">
         <table class="sample-table" id="sample-table">
           <thead>
             <tr>
-              <th scope="col"><input type="checkbox" id="select-all" aria-label="Select all samples" checked></th>
               <th scope="col">#</th>
               <th scope="col">Sample ID</th>
               <th scope="col" data-only="1">Chemical</th>
@@ -83,8 +81,19 @@
       </div>
 
       <fieldset class="analyses" id="analysis-panel" data-path="analysis_ids">
-        <legend id="analysis-legend">Analyses</legend>
-        <button type="button" class="btn btn--secondary btn--small" id="select-all-samples" hidden>Edit all samples</button>
+        <legend>Analyses</legend>
+        <div class="mode-switch" role="radiogroup" aria-label="How analyses are chosen">
+          <label class="mode-option"><input type="radio" name="analysis_mode" value="all" checked>
+            <span><strong>Same for every sample</strong><br><span class="muted">Tick once, applies to all rows</span></span></label>
+          <label class="mode-option"><input type="radio" name="analysis_mode" value="one">
+            <span><strong>Different for each sample</strong><br><span class="muted">Step through the samples one by one</span></span></label>
+        </div>
+        <div class="sample-stepper" id="sample-stepper" hidden>
+          <button type="button" class="btn btn--secondary btn--small" id="prev-sample" aria-label="Previous sample">◀</button>
+          <label>Editing <select id="current-sample"></select></label>
+          <button type="button" class="btn btn--secondary btn--small" id="next-sample" aria-label="Next sample">▶</button>
+        </div>
+        <p class="hint" id="analysis-note"></p>
         <div class="analysis-groups" id="analysis-groups"></div>
       </fieldset>
     </section>
