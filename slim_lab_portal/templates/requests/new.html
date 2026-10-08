@@ -52,7 +52,8 @@
       <h2>Samples</h2>
       <p class="hint">Works like a spreadsheet: paste a column of sample IDs from Excel to add one row per ID,
         and press <kbd>Ctrl</kbd>+<kbd>D</kbd> in a cell to copy the value from the row above. New rows copy the
-        row above, so set up the first sample, then paste the rest of the IDs.</p>
+        row above, so set up the first sample, then paste the rest of the IDs. To give one sample different
+        analyses, click its entry in the Analyses column.</p>
       <div class="table-wrap">
         <table class="sample-table" id="sample-table">
           <thead>
@@ -83,6 +84,7 @@
 
       <fieldset class="analyses" id="analysis-panel" data-path="analysis_ids">
         <legend id="analysis-legend">Analyses</legend>
+        <button type="button" class="btn btn--secondary btn--small" id="select-all-samples" hidden>Edit all samples</button>
         <div class="analysis-groups" id="analysis-groups"></div>
       </fieldset>
     </section>

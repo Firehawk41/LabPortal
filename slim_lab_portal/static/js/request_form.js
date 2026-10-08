@@ -115,9 +115,14 @@
       const tdTime = cell(s, "requested_time", time);
       time.disabled = !timeLimited(s);
       tr.append(tdTime);
-      const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" },
-        [...s.analyses].map(analysisName).join(", ") || "—");
+      // Clicking a row's analyses edits that sample alone.
+      const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" });
+      const edit = el("button", { type: "button", class: "link-button", "data-edit": String(s.key),
+                                  title: "Edit this sample's analyses" },
+                      [...s.analyses].map(analysisName).join(", ") || "Choose analyses");
+      summary.append(edit);
       tr.append(summary);
+      if (selected.has(s.key) && selected.size < samples.length) tr.classList.add("is-selected");
       tr.append(cell(s, "additional_element_ids", el("input", { placeholder: "e.g. Fe, Li", size: "8" })));
       tr.append(cell(s, "additional_notes", el("input", { maxlength: "2000", placeholder: "optional" })));
       const remove = el("button", { type: "button", class: "btn btn--secondary btn--small", "data-remove": String(s.key),
@@ -135,9 +140,15 @@
 
   function renderAnalysisPanel() {
     const chosen = samples.filter((s) => selected.has(s.key));
-    $("analysis-legend").textContent = chosen.length === samples.length
-      ? `Analyses — applied to all ${samples.length} sample${samples.length === 1 ? "" : "s"}`
-      : `Analyses — applied to ${chosen.length} selected sample${chosen.length === 1 ? "" : "s"}`;
+    const all = chosen.length === samples.length;
+    let legend;
+    if (all) legend = `Analyses for all ${samples.length} sample${samples.length === 1 ? "" : "s"}`;
+    else if (chosen.length === 1) {
+      const i = samples.indexOf(chosen[0]);
+      legend = `Analyses for sample ${i + 1}${chosen[0].sample_name ? ` (${chosen[0].sample_name})` : ""} only`;
+    } else legend = `Analyses for ${chosen.length} selected samples`;
+    $("analysis-legend").textContent = legend;
+    $("select-all-samples").hidden = all;
     document.querySelectorAll("#analysis-groups input").forEach((box) => {
       const id = Number(box.value);
       const count = chosen.filter((s) => s.analyses.has(id)).length;
@@ -199,6 +210,13 @@
     }
   });
   tbody.addEventListener("click", (event) => {
+    if (event.target.dataset.edit) {
+      selected.clear();
+      selected.add(Number(event.target.dataset.edit));
+      render();
+      $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     const key = event.target.dataset.remove;
     if (!key || samples.length === 1) return;
     samples = samples.filter((s) => String(s.key) !== key);
@@ -235,6 +253,10 @@
 
   $("select-all").addEventListener("change", (event) => {
     samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
+    render();
+  });
+  $("select-all-samples").addEventListener("click", () => {
+    samples.forEach((s) => selected.add(s.key));
     render();
   });
   $("add-sample").addEventListener("click", () => {
