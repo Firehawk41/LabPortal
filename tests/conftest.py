@@ -1,3 +1,4 @@
+import os
 import re
 
 import pytest
@@ -6,7 +7,9 @@ from fastapi.testclient import TestClient
 from slim_lab_portal.config import Settings
 from slim_lab_portal.db import Base, make_engine, make_session_factory
 from slim_lab_portal.main import create_app
+from slim_lab_portal.domain import RequestType
 from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.reference import AnalysisRef, ChemicalRef, CustomerRef, ElementRef, StaticReferenceData
 from slim_lab_portal.security import hash_password
 
 PASSWORD = "correct horse battery staple"
@@ -25,9 +28,16 @@ def make_settings(database_url: str, **overrides) -> Settings:
     return Settings(**values)
 
 
+# Tests run on SQLite by default. Set TEST_DATABASE_URL to a throwaway Postgres database to
+# run them on Postgres too (its tables are dropped and recreated for every test).
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+postgres_only = pytest.mark.skipif(not TEST_DATABASE_URL, reason="needs TEST_DATABASE_URL (Postgres)")
+
+
 @pytest.fixture
 def engine(tmp_path):
-    engine = make_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    engine = make_engine(TEST_DATABASE_URL or f"sqlite:///{tmp_path / 'test.db'}")
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield engine
     engine.dispose()
@@ -40,8 +50,13 @@ def db(engine):
 
 
 @pytest.fixture
-def app(engine):
-    return create_app(make_settings(str(engine.url)), engine=engine)
+def reference():
+    return demo_reference()
+
+
+@pytest.fixture
+def app(engine, reference):
+    return create_app(make_settings(str(engine.url)), engine=engine, reference=reference)
 
 
 @pytest.fixture
@@ -72,10 +87,38 @@ def csrf_from(html: str) -> str:
     return match.group(1)
 
 
+def login_api(client: TestClient, email: str) -> None:
+    """Logs in and sets the X-CSRF-Token header for later JSON requests."""
+    client.headers.pop("X-CSRF-Token", None)  # a stale header would override the form token
+    assert login(client, email).status_code == 303
+    client.headers["X-CSRF-Token"] = csrf_from(client.get("/").text)
+
+
 def login(client: TestClient, email: str, password: str = PASSWORD):
     token = csrf_from(client.get("/login").text)
     return client.post(
         "/login",
         data={"email": email, "password": password, "csrf_token": token, "next": "/"},
         follow_redirects=False,
+    )
+
+
+def demo_reference() -> StaticReferenceData:
+    """Small fictional reference set: customers 1 (A), 2 (B, two sites), 7 (G, a group)."""
+    C, W, F = RequestType.CHEMICAL, RequestType.WATER, RequestType.WAFER
+    return StaticReferenceData.of(
+        customers=[
+            CustomerRef(1, "A", "1 A Street", "Anytown", "TX", "75000", "USA"),
+            CustomerRef(2, "B", "2 B Street", "Anytown", "TX", "75000", "USA"),
+            CustomerRef(7, "G", is_group=True),
+        ],
+        chemicals=[ChemicalRef(1, "Water"), ChemicalRef(2, "Chemical 01"), ChemicalRef(3, "Chemical 02")],
+        elements=[ElementRef(3, "Li", "Lithium"), ElementRef(26, "Fe", "Iron")],
+        analyses=[
+            AnalysisRef(1, "36 Elements", "36_elements_icpms", "Metals", request_types=frozenset({C, W, F})),
+            AnalysisRef(2, "pH", "ph", "Physical", request_types=frozenset({C, W})),
+            AnalysisRef(3, "TOC", "toc", "Organics", request_types=frozenset({W})),
+            AnalysisRef(4, "Additional Element", "additional_element_icpms", "Metals", portal_selectable=False),
+        ],
+        customer_locations={2: ("SX5N", "SX5S")},
     )

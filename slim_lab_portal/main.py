@@ -7,10 +7,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from slim_lab_portal import __version__
+from slim_lab_portal.api import register_error_handlers
+from slim_lab_portal.api import router as submissions_router
 from slim_lab_portal.auth import LoginRequired, StaffRequired, login_redirect
 from slim_lab_portal.auth import router as auth_router
 from slim_lab_portal.config import Settings, load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
+from slim_lab_portal.reference import ReferenceData, StaticReferenceData
 from slim_lab_portal.routes import router as pages_router
 from slim_lab_portal.security import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from slim_lab_portal.web import STATIC_DIR, render
@@ -22,7 +25,11 @@ def _wants_json(request: Request) -> bool:
     return request.url.path.startswith("/api/") or "application/json" in request.headers.get("accept", "")
 
 
-def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    engine=None,
+    reference: ReferenceData | None = None,
+) -> FastAPI:
     settings = settings or load_settings()
     engine = engine or make_engine(settings.database_url)
 
@@ -36,6 +43,8 @@ def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
+    # Step 4 replaces this with the cache over SLIM's reference tables.
+    app.state.reference = reference if reference is not None else StaticReferenceData()
 
     # Last added = outermost. Headers wrap everything, including 413s and session errors.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
@@ -52,6 +61,8 @@ def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(auth_router)
     app.include_router(pages_router)
+    app.include_router(submissions_router)
+    register_error_handlers(app)
 
     @app.exception_handler(LoginRequired)
     async def _login_required(request: Request, _exc: LoginRequired):

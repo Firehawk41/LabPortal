@@ -19,7 +19,7 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 
 1. ✅ Spec: `docs/SLIM_DOMAIN_V2.md`
 2. ✅ FastAPI skeleton: config, SQLAlchemy 2, Alembic, session auth, CSRF, security headers, pytest
-3. ⬜ Domain objects (pydantic, per spec §3–4), input models, repositories, TR number counter
+3. ✅ Domain objects (pydantic, per spec §3–4), input models, repository, TR number counter, JSON API
 4. ⬜ Reference-data cache over SLIM tables; `scripts/seed_reference.py` with demo data
 5. ⬜ Port form + JS (per-request-type fields, catalog from cache), receipt, statuses, JSON view
 6. ⬜ Admin: customers (pick existing SLIM customers only), users (many per customer), profiles
@@ -34,7 +34,7 @@ cp .env.example .env                     # DATABASE_URL defaults to sqlite:///sl
 alembic -c slim_lab_portal/alembic.ini upgrade head
 PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM
 uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:8000, API docs at /api/docs
-pytest
+pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
 ```
 
 Or `docker compose up --build` (portal + Postgres 16 on :8000).
@@ -46,7 +46,13 @@ slim_lab_portal/
 ├── main.py          # create_app(settings, engine): middleware, routers, exception handlers, /health
 ├── config.py        # Settings from env (APP_ENV, SECRET_KEY, DATABASE_URL, ...)
 ├── db.py            # Base (portal-owned tables only), make_engine, get_db dependency
-├── models.py        # SQLAlchemy models: User
+├── domain/          # Spec §3–4: enums.py, tr.py (TRSubmission, TRSample, ...), workflow.py (transitions)
+├── models.py        # SQLAlchemy models: User + TR tables (tr_submissions, tr_samples, ...)
+├── repositories.py  # TRSubmissionRepository: domain <-> rows, gapless TR numbers, stale-update check
+├── schemas.py       # Input models (SubmissionIn, SampleIn, StatusChangeIn) — shape/type validation only
+├── services.py      # SubmissionService: reference-data rules, access rules, submit/list/get/change_status
+├── reference.py     # ReferenceData protocol + StaticReferenceData (step 4 adds the SLIM-table cache)
+├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── routes.py        # Page routes: / , /admin, /api/me (placeholders until steps 5–6)
@@ -55,7 +61,7 @@ slim_lab_portal/
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, login, index, error, admin/home
 └── static/          # css/style.css, css/admin.css (.admin-theme), js/script.js (old form JS, to port)
-tests/               # pytest; SQLite per test via conftest.py
+tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
 docs/SLIM_DOMAIN_V2.md
 ```
 
@@ -79,6 +85,11 @@ docs/SLIM_DOMAIN_V2.md
 - **Errors:** invalid input → 422 with per-field detail (FastAPI default). HTML routes render
   `error.html`; `/api/*` and `Accept: application/json` get JSON. Unauthenticated: HTML → 303 to
   `/login?next=...`, API → 401. Non-staff on staff routes → 403.
+- **API:** `POST /api/submissions` (201), `GET /api/submissions[?status&request_type&page]`,
+  `GET /api/submissions/{tr_number}`, `POST /api/submissions/{tr_number}/status`. Responses are
+  `TRSubmission.model_dump(mode="json")` — enums as ints. Customers only see their own customer's
+  TRs (others → 404). Business-rule failures → 422 with `loc` pointing at the field; disallowed or
+  concurrent status changes → 409.
 - **Routes are plain `def`** (sync SQLAlchemy), not `async def`.
 - 1 MB request cap (`MAX_BODY_BYTES`), enforced with or without Content-Length.
 

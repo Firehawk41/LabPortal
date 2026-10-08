@@ -290,9 +290,12 @@ location valid) are checked in the portal's submission service, not in the froze
 ## 6. TR numbers
 
 - Format `TR` + at least five digits: `TR00001` … `TR99999`, then `TR100000`.
-- Assigned from a single-row counter table, incremented with `SELECT … FOR UPDATE` **in the
-  same transaction** that inserts the submission. A failed submission rolls the counter
-  back, so numbers have **no gaps**. Contention is negligible at lab volumes.
+- Assigned from a single-row counter table with one atomic statement in the **same
+  transaction** that inserts the submission:
+  `UPDATE tr_number_counter SET last_value = last_value + 1 WHERE id = 1 RETURNING last_value`.
+  The row stays locked until commit, and a failed submission rolls the increment back, so
+  numbers have **no gaps** and never collide (tested with 40 parallel submits on Postgres).
+  Works on Postgres and SQLite ≥ 3.35.
 - When SLIM starts storing submissions (including parsed xlsx ones), it takes over the
   same counter table, so both sources share one series.
 
@@ -315,8 +318,8 @@ tr_samples                 id PK, submission_id FK, position, sample_name, chemi
                            chemical_name, processing_time, requested_time, additional_notes,
                            wafer_size, reporting_unit, water_package
                            unique (submission_id, position)
-tr_sample_analyses         sample_id FK, analysis_id            PK (sample_id, analysis_id)
-tr_sample_additional_elements  sample_id FK, element_id         PK (sample_id, element_id)
+tr_sample_analyses         sample_id FK, analysis_id, position  PK (sample_id, analysis_id)
+tr_sample_additional_elements  sample_id FK, element_id, position  PK (sample_id, element_id)
 tr_submission_emails       submission_id FK, kind (results_to|results_cc|invoice_to|invoice_cc),
                            position, email                      PK (submission_id, kind, position)
 tr_status_events           id PK, submission_id FK, from_status, to_status, at,
@@ -324,6 +327,7 @@ tr_status_events           id PK, submission_id FK, from_status, to_status, at,
 customer_profiles          customer_id PK, contact, phone, default_payment_method,
                            default_po_number, results_to, results_cc, invoice_to,
                            invoice_cc, locations   (lists stored as newline-separated text)
+                           -- position columns keep the customer's order of analyses/elements
 analysis_catalog           analysis_id PK, code unique, group_name, request_types
                            (comma-separated ints), portal_selectable bool, sort_order
 users (portal-only)        id UUID PK, email unique, password_hash, role (customer|staff),
@@ -421,7 +425,7 @@ Notes:
 ## 9. How slim-domain adopts this later (not part of the portal work)
 
 1. Move `slim_lab_portal/domain/*` into `slim_domain/domain/tr/` (v2), alongside v1 until
-   the report engine is switched.
+   the report engine is switched. slim-domain then needs `pydantic[email]` (for `EmailStr`).
 2. Move the tables in §7 (except `users`) under slim-domain's repositories; the portal
    switches to slim-domain's repository classes.
 3. Adapt the xlsx parsers to produce v2 objects: `source=XLSX`, `file_name` kept,
