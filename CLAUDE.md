@@ -35,8 +35,10 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 2. ✅ FastAPI skeleton: config, SQLAlchemy 2, Alembic, session auth, CSRF, security headers, pytest
 3. ✅ Domain objects (pydantic, per spec §3–4), input models, repository, TR number counter, JSON API
 4. ✅ Reference-data cache over SLIM tables, analysis catalog, `scripts/seed_demo.py` (OSS demo data)
-5. ⬜ (A) Bridge: portal-side adapter TRSubmission v2 -> slim-domain-oss v1 TRSubmission, plus a
+5. ✅ (A) Bridge: portal-side adapter TRSubmission v2 -> slim-domain-oss v1 TRSubmission, plus a
    test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
+   `slim_lab_portal/bridge.py` (`to_slim_v1`, received TRs only); `tests/test_bridge.py` renders
+   Chemical/Water/Wafer reports with the engine's own writer (skipped without the OSS packages).
 6. ⬜ (B) Screens: customer form (per-request-type fields, choices from /api/reference), staff list,
    receive, status changes, JSON view; admin customers/users/profiles. Portal only.
 7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
@@ -47,7 +49,7 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    launches with several modules and can take one submission end to end: submission → receipt →
    analysis/report → delivery → invoice.
 
-Agreed order: backend is essentially done (except A). Next A, then B (UX + frontend, designed with
+Agreed order: backend done, including A. Next B (UX + frontend, designed with
 the user), then D when approved; C last. The user is token-constrained: small, focused steps,
 short replies.
 
@@ -84,6 +86,7 @@ slim_lab_portal/
 ├── slim_tables.py   # Read-only Core defs of SLIM's customers/chemicals/elements/analyses (own MetaData)
 ├── catalog.py       # sync_analysis_catalog: data/analysis_catalog.csv -> analysis_catalog, matched by SLIM name
 ├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
+├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
