@@ -11,3 +11,4 @@ screenshots/
 *.db
 .pytest_cache/
 *.egg-info/
+.venv/
