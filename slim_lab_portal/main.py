@@ -8,12 +8,14 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from slim_lab_portal import __version__
 from slim_lab_portal.api import register_error_handlers
+from slim_lab_portal.api import reference_router
 from slim_lab_portal.api import router as submissions_router
 from slim_lab_portal.auth import LoginRequired, StaffRequired, login_redirect
 from slim_lab_portal.auth import router as auth_router
 from slim_lab_portal.config import Settings, load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
-from slim_lab_portal.reference import ReferenceData, StaticReferenceData
+from slim_lab_portal.reference import ReferenceData
+from slim_lab_portal.reference_cache import ReferenceCache
 from slim_lab_portal.routes import router as pages_router
 from slim_lab_portal.security import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from slim_lab_portal.web import STATIC_DIR, render
@@ -43,8 +45,12 @@ def create_app(
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
-    # Step 4 replaces this with the cache over SLIM's reference tables.
-    app.state.reference = reference if reference is not None else StaticReferenceData()
+    if reference is None:
+        slim_engine = engine
+        if settings.slim_database_url and settings.slim_database_url != settings.database_url:
+            slim_engine = make_engine(settings.slim_database_url)
+        reference = ReferenceCache(slim_engine, engine, ttl_seconds=settings.reference_cache_ttl_seconds)
+    app.state.reference = reference
 
     # Last added = outermost. Headers wrap everything, including 413s and session errors.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
@@ -62,6 +68,7 @@ def create_app(
     app.include_router(auth_router)
     app.include_router(pages_router)
     app.include_router(submissions_router)
+    app.include_router(reference_router)
     register_error_handlers(app)
 
     @app.exception_handler(LoginRequired)

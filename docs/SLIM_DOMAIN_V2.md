@@ -36,9 +36,9 @@ one Postgres
   the tables it owns.
 - No foreign keys from portal tables into SLIM tables. IDs are validated in application
   code against the reference cache, so the two can sit in different databases if needed.
-- Dev, test and the portfolio demo create the SLIM reference tables themselves
-  (`scripts/seed_reference.py`) with the same fictional data as
-  `slim-report-engine-oss/demo/demo.py`.
+- Dev, test and the portfolio demo get the SLIM reference tables from the OSS repos:
+  `scripts/seed_demo.py` runs `slim-report-engine-oss/demo/demo.py`'s own `seed()` (fictional
+  data, slim-domain's own table definitions) — only when those tables are empty.
 
 ### Reference cache
 
@@ -345,7 +345,10 @@ SLIM's `analyses` table has no stable code, and which analyses suit which reques
 lives in the report engine (`wafer_submission_builder._RECOGNIZED_SELECTIONS`). v2 adds
 both to the domain as `analyses.code` and an `analysis_request_types` table. Until
 slim-domain has them, the portal keeps them in its own `analysis_catalog` table, keyed by
-SLIM `analyses.ID`.
+SLIM `analyses.ID`. The table below lives in `slim_lab_portal/data/analysis_catalog.csv` and is
+loaded with `python -m slim_lab_portal.cli sync-analysis-catalog`, matching rows to SLIM by
+`analysis_name` (case-insensitive). Catalog rows SLIM doesn't have are skipped; SLIM analyses with
+no catalog row are never offered.
 
 Code mapping (portal code ← SLIM `analysis_name`). C = Chemical, W = Water, F = Wafer.
 

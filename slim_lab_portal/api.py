@@ -9,7 +9,16 @@ from sqlalchemy.orm import Session
 
 from slim_lab_portal.auth import RequireUser
 from slim_lab_portal.db import get_db
-from slim_lab_portal.domain import RequestType, TRStatus, TRSubmission
+from slim_lab_portal.domain import (
+    ALLOWED_PROCESSING_TIMES,
+    PaymentMethod,
+    ProcessingTime,
+    ReportingUnit,
+    RequestType,
+    TRStatus,
+    TRSubmission,
+    WaferSize,
+)
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
 from slim_lab_portal.schemas import StatusChangeIn, SubmissionIn
@@ -88,3 +97,41 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(Conflict)
     async def _conflict(_request: Request, exc: Conflict):
         return JSONResponse({"detail": str(exc)}, status_code=409)
+
+
+# ---------------------------------------------------------------- reference data for the form
+
+reference_router = APIRouter(prefix="/api/reference", tags=["reference"], dependencies=[Depends(csrf_protect)])
+
+
+def _choice(enum_member, label: str | None = None) -> dict[str, Any]:
+    return {"value": int(enum_member), "label": label or enum_member.label}
+
+
+@reference_router.get("", summary="Choices for the submission form, from the SLIM reference cache")
+def reference_data(user: RequireUser, reference: Annotated[ReferenceData, Depends(get_reference)]):
+    request_types = []
+    for rt in RequestType:
+        request_types.append({
+            **_choice(rt),
+            "processing_times": [_choice(pt, pt.portal_label) for pt in ALLOWED_PROCESSING_TIMES[rt]],
+            "analyses": [
+                {"id": a.id, "code": a.code, "name": a.name, "group": a.group, "description": a.description}
+                for a in reference.analyses_for(rt)
+            ],
+        })
+    body: dict[str, Any] = {
+        "request_types": request_types,
+        "chemicals": [{"id": c.id, "name": c.name} for c in reference.chemical_choices()],
+        "elements": [{"id": e.id, "symbol": e.symbol, "name": e.name} for e in reference.element_choices()],
+        "wafer_sizes": [_choice(w) for w in WaferSize],
+        "reporting_units": [_choice(u) for u in ReportingUnit],
+        "payment_methods": [_choice(p) for p in PaymentMethod],
+        "processing_time_requiring_requested_time": int(ProcessingTime.TIME_LIMITED),
+    }
+    if user.is_staff:
+        body["customers"] = [{"id": c.id, "name": c.name, "locations": list(reference.locations(c.id))}
+                             for c in reference.customer_choices()]
+    else:
+        body["locations"] = list(reference.locations(user.customer_id))
+    return body

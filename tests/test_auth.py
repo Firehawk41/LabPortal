@@ -118,3 +118,24 @@ def test_api_returns_401_json_when_anonymous(client):
 def test_api_me(client, customer_user):
     login(client, "jane@acme.example")
     assert client.get("/api/me").json()["customer_id"] == 1
+
+
+def test_admin_shows_reference_status_and_refreshes(engine, db, staff_user):
+    from fastapi.testclient import TestClient
+
+    from slim_lab_portal.catalog import sync_analysis_catalog
+    from slim_lab_portal.main import create_app
+    from tests.conftest import make_settings
+    from tests.slim_fixtures import create_slim_tables
+
+    create_slim_tables(engine)
+    sync_analysis_catalog(engine, db)
+    db.commit()
+    app = create_app(make_settings(str(engine.url)), engine=engine)  # real ReferenceCache
+    with TestClient(app) as client:
+        login(client, "staff@lab.example")
+        page = client.get("/admin").text
+        assert "2 customers" in page and "offered in the portal" in page
+        token = csrf_from(page)
+        response = client.post("/admin/reference/refresh", data={"csrf_token": token})
+        assert "Reference data reloaded from SLIM." in response.text

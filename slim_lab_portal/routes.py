@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 
 from slim_lab_portal.auth import CurrentUser, RequireStaff, RequireUser
 from slim_lab_portal.security import csrf_protect
-from slim_lab_portal.web import render
+from slim_lab_portal.web import flash, render
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
 
@@ -21,7 +21,24 @@ def index(request: Request, user: CurrentUser):
 
 @router.get("/admin", name="admin_home")
 def admin_home(request: Request, user: RequireStaff):
-    return render(request, "admin/home.html")
+    reference = request.app.state.reference
+    status = None
+    if hasattr(reference, "status"):
+        reference.snapshot()  # the cache loads lazily; make sure the page reports a real load
+        status = reference.status()
+    return render(request, "admin/home.html", {"reference_status": status})
+
+
+@router.post("/admin/reference/refresh", name="refresh_reference")
+def refresh_reference(request: Request, user: RequireStaff):
+    reference = request.app.state.reference
+    if not hasattr(reference, "refresh"):
+        flash(request, "This reference data source cannot be refreshed.", "error")
+    elif reference.refresh():
+        flash(request, "Reference data reloaded from SLIM.")
+    else:
+        flash(request, "Could not reload reference data; still using the previous copy.", "error")
+    return RedirectResponse(request.url_for("admin_home").path, status_code=303)
 
 
 @router.get("/api/me", name="api_me")

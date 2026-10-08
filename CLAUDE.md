@@ -20,7 +20,7 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 1. ✅ Spec: `docs/SLIM_DOMAIN_V2.md`
 2. ✅ FastAPI skeleton: config, SQLAlchemy 2, Alembic, session auth, CSRF, security headers, pytest
 3. ✅ Domain objects (pydantic, per spec §3–4), input models, repository, TR number counter, JSON API
-4. ⬜ Reference-data cache over SLIM tables; `scripts/seed_reference.py` with demo data
+4. ✅ Reference-data cache over SLIM tables, analysis catalog, `scripts/seed_demo.py` (OSS demo data)
 5. ⬜ Port form + JS (per-request-type fields, catalog from cache), receipt, statuses, JSON view
 6. ⬜ Admin: customers (pick existing SLIM customers only), users (many per customer), profiles
 7. ⬜ Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS; README
@@ -31,7 +31,8 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env                     # DATABASE_URL defaults to sqlite:///slim_lab_portal.db
-alembic -c slim_lab_portal/alembic.ini upgrade head
+pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss   # OSS repos, for the demo seed
+python scripts/seed_demo.py              # migrations + OSS demo SLIM data + analysis_catalog
 PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM
 uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:8000, API docs at /api/docs
 pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
@@ -51,16 +52,21 @@ slim_lab_portal/
 ├── repositories.py  # TRSubmissionRepository: domain <-> rows, gapless TR numbers, stale-update check
 ├── schemas.py       # Input models (SubmissionIn, SampleIn, StatusChangeIn) — shape/type validation only
 ├── services.py      # SubmissionService: reference-data rules, access rules, submit/list/get/change_status
-├── reference.py     # ReferenceData protocol + StaticReferenceData (step 4 adds the SLIM-table cache)
+├── reference.py     # ReferenceData protocol, StaticReferenceData (snapshot + form choices)
+├── reference_cache.py  # ReferenceCache: loads SLIM tables + analysis_catalog, TTL refresh, keeps last good copy
+├── slim_tables.py   # Read-only Core defs of SLIM's customers/chemicals/elements/analyses (own MetaData)
+├── catalog.py       # sync_analysis_catalog: data/analysis_catalog.csv -> analysis_catalog, matched by SLIM name
+├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── routes.py        # Page routes: / , /admin, /api/me (placeholders until steps 5–6)
 ├── web.py           # Jinja2 templates, render(), flash()
-├── cli.py           # create-staff, create-customer-user
+├── cli.py           # create-staff, create-customer-user, sync-analysis-catalog
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, login, index, error, admin/home
 └── static/          # css/style.css, css/admin.css (.admin-theme), js/script.js (old form JS, to port)
+scripts/seed_demo.py # Demo DB only: runs slim-report-engine-oss demo seed() if SLIM tables are empty, syncs catalog
 tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
 docs/SLIM_DOMAIN_V2.md
 ```
@@ -90,6 +96,13 @@ docs/SLIM_DOMAIN_V2.md
   `TRSubmission.model_dump(mode="json")` — enums as ints. Customers only see their own customer's
   TRs (others → 404). Business-rule failures → 422 with `loc` pointing at the field; disallowed or
   concurrent status changes → 409.
+- **Reference data:** `app.state.reference` is a `ReferenceCache` (TTL `REFERENCE_CACHE_TTL_SECONDS`,
+  default 300 s; staff can force a reload on /admin). A failed refresh keeps the previous snapshot.
+  SLIM analyses with no `analysis_catalog` row are never offered. `GET /api/reference` gives the
+  form its choices (customers only for staff).
+- **Demo data only:** dev, tests and the portfolio use the OSS repos' fictional data
+  (`slim-report-engine-oss/demo/demo.py`). `scripts/seed_demo.py` never writes into SLIM tables
+  that already hold data. Never point the portal at the lab's production database from here.
 - **Routes are plain `def`** (sync SQLAlchemy), not `async def`.
 - 1 MB request cap (`MAX_BODY_BYTES`), enforced with or without Content-Length.
 

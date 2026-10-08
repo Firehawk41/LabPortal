@@ -11,6 +11,7 @@ from slim_lab_portal.domain import RequestType
 from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import AnalysisRef, ChemicalRef, CustomerRef, ElementRef, StaticReferenceData
 from slim_lab_portal.security import hash_password
+from slim_lab_portal.slim_tables import slim_metadata
 
 PASSWORD = "correct horse battery staple"
 
@@ -37,6 +38,7 @@ postgres_only = pytest.mark.skipif(not TEST_DATABASE_URL, reason="needs TEST_DAT
 @pytest.fixture
 def engine(tmp_path):
     engine = make_engine(TEST_DATABASE_URL or f"sqlite:///{tmp_path / 'test.db'}")
+    slim_metadata.drop_all(engine)  # SLIM test tables some tests create (tests/slim_fixtures.py)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield engine

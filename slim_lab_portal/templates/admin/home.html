@@ -8,4 +8,28 @@
     <p>Signed in as {{ current_user.email }} ({{ current_user.initials }}).</p>
     <p>Submission management is being rebuilt.</p>
   </section>
+
+  <section class="form-section" aria-labelledby="reference-heading">
+    <h2 id="reference-heading">SLIM reference data</h2>
+    {% if reference_status %}
+      {% if reference_status.loaded_at %}
+        <p>Last loaded {{ reference_status.loaded_at.strftime("%Y-%m-%d %H:%M UTC") }}:
+          {{ reference_status.counts.customers }} customers,
+          {{ reference_status.counts.chemicals }} chemicals,
+          {{ reference_status.counts.elements }} elements,
+          {{ reference_status.counts.analyses }} analyses
+          ({{ reference_status.counts.portal_analyses }} offered in the portal).</p>
+      {% else %}
+        <p>Not loaded yet.</p>
+      {% endif %}
+      {% if reference_status.last_error %}
+        <div class="form-error" role="alert">Last refresh failed
+          ({{ reference_status.last_error_at.strftime("%Y-%m-%d %H:%M UTC") }}): {{ reference_status.last_error }}</div>
+      {% endif %}
+    {% endif %}
+    <form method="post" action="{{ url_for('refresh_reference') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <button type="submit" class="btn btn--primary">Reload now</button>
+    </form>
+  </section>
 {% endblock %}

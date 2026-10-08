@@ -182,3 +182,19 @@ class TRStatusEventRow(Base):
 def _seed_counter(target, connection, **_kw) -> None:
     # Same row the 0002 migration inserts; keeps metadata.create_all (tests, demos) equivalent.
     connection.execute(target.insert().values(id=1, last_value=0))
+
+
+# ---------------------------------------------------------------- reference overlays
+# Spec §8: what SLIM's analyses table doesn't hold yet (stable code, group, request types).
+# Moves to slim-domain as analyses.code + analysis_request_types later.
+
+
+class AnalysisCatalogRow(Base):
+    __tablename__ = "analysis_catalog"
+
+    analysis_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)  # SLIM analyses."ID"
+    code: Mapped[str] = mapped_column(String(60), unique=True)
+    group_name: Mapped[str] = mapped_column(String(60))
+    request_types: Mapped[str] = mapped_column(String(20))  # comma-separated RequestType values, e.g. "1,2"
+    portal_selectable: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)

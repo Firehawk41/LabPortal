@@ -181,3 +181,24 @@ def test_customer_cancels_own_submitted_request(client, staff_user, customer_use
     assert response.json()["status_history"][-1]["note"] == "duplicate"
     assert client.post("/api/submissions/TR00002/status",
                        json={"to_status": 2, "date_received": "2026-10-09"}).status_code == 409
+
+
+def test_reference_for_customer(as_customer):
+    body = as_customer.get("/api/reference").json()
+    assert "customers" not in body  # customers don't see the customer list
+    assert body["locations"] == []
+    assert [c["name"] for c in body["chemicals"]] == ["Chemical 01", "Chemical 02"]
+    wafer = next(rt for rt in body["request_types"] if rt["value"] == 3)
+    assert [a["code"] for a in wafer["analyses"]] == ["36_elements_icpms"]
+    assert "Next Day RUSH" in [p["label"] for p in wafer["processing_times"]]
+    chemical = next(rt for rt in body["request_types"] if rt["value"] == 1)
+    assert "Call-in RUSH (outside business hours)" in [p["label"] for p in chemical["processing_times"]]
+
+
+def test_reference_for_staff_lists_customers(as_staff):
+    body = as_staff.get("/api/reference").json()
+    assert [(c["name"], c["locations"]) for c in body["customers"]] == [("A", []), ("B", ["SX5N", "SX5S"])]
+
+
+def test_reference_needs_login(client):
+    assert client.get("/api/reference").status_code == 401

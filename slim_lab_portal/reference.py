@@ -1,8 +1,8 @@
 """Read-only view of SLIM reference data (customers, chemicals, elements, analyses).
 
-The submission service depends on the `ReferenceData` protocol only. Step 4 adds the
-periodically refreshed cache over the SLIM tables; until then the app starts with an empty
-`StaticReferenceData`, and tests fill one in directly.
+The submission service and the form depend on the `ReferenceData` protocol only.
+`StaticReferenceData` is an immutable in-memory snapshot; `reference_cache.ReferenceCache`
+builds snapshots from the SLIM tables and refreshes them periodically.
 """
 
 from collections.abc import Iterable
@@ -61,6 +61,9 @@ class AnalysisRef:
 
 WATER_CHEMICAL_NAME = "Water"
 
+# Display order of analysis groups in the form; unknown groups sort last, alphabetically.
+GROUP_ORDER = ("Metals", "Anions", "Cations", "Organics", "Physical", "Silicon", "Microbiology", "Assay & titration")
+
 
 class ReferenceData(Protocol):
     def customer(self, customer_id: int) -> CustomerRef | None: ...
@@ -69,6 +72,10 @@ class ReferenceData(Protocol):
     def element(self, element_id: int) -> ElementRef | None: ...
     def analysis(self, analysis_id: int) -> AnalysisRef | None: ...
     def locations(self, customer_id: int) -> tuple[str, ...]: ...
+    def customer_choices(self) -> list[CustomerRef]: ...
+    def chemical_choices(self) -> list[ChemicalRef]: ...
+    def element_choices(self) -> list[ElementRef]: ...
+    def analyses_for(self, request_type: RequestType) -> list[AnalysisRef]: ...
 
 
 @dataclass
@@ -116,3 +123,29 @@ class StaticReferenceData:
 
     def locations(self, customer_id: int) -> tuple[str, ...]:
         return self.customer_locations.get(customer_id, ())
+
+    # ------------------------------------------------------------ choices for the form
+
+    def customer_choices(self) -> list[CustomerRef]:
+        """Customers that can submit (groups are invoicing umbrellas, not submitters)."""
+        return sorted((c for c in self.customers.values() if not c.is_group), key=lambda c: c.name.lower())
+
+    def chemical_choices(self) -> list[ChemicalRef]:
+        """Chemicals a Chemical sample can be; Water samples get the Water chemical automatically."""
+        return sorted(
+            (c for c in self.chemicals.values() if c.name.strip().lower() != WATER_CHEMICAL_NAME.lower()),
+            key=lambda c: c.name.lower(),
+        )
+
+    def element_choices(self) -> list[ElementRef]:
+        return sorted(self.elements.values(), key=lambda e: e.id)
+
+    def analyses_for(self, request_type: RequestType) -> list[AnalysisRef]:
+        def key(a: AnalysisRef):
+            group = GROUP_ORDER.index(a.group) if a.group in GROUP_ORDER else len(GROUP_ORDER)
+            return group, a.group, a.sort_order, a.name.lower()
+
+        return sorted(
+            (a for a in self.analyses.values() if a.portal_selectable and request_type in a.request_types),
+            key=key,
+        )

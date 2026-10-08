@@ -23,12 +23,17 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+# The demo seed (scripts/seed_demo.py) also needs the OSS SLIM packages, installed from local
+# checkouts: pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
 
 [tool.setuptools.packages.find]
 include = ["slim_lab_portal*"]
 
 [tool.setuptools.package-data]
-slim_lab_portal = ["templates/**/*", "static/**/*", "migrations/**/*", "alembic.ini"]
+slim_lab_portal = ["templates/**/*", "static/**/*", "migrations/**/*", "alembic.ini", "data/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "__pycache__/*"]
