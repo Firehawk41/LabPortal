@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Admin — YourLab{% endblock %}
+
+{% block content %}
+  <h1>Lab Admin</h1>
+  <section class="form-section">
+    <p>Signed in as {{ current_user.email }} ({{ current_user.initials }}).</p>
+    <p>Submission management is being rebuilt.</p>
+  </section>
+{% endblock %}
