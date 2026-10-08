@@ -35,9 +35,19 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 2. ✅ FastAPI skeleton: config, SQLAlchemy 2, Alembic, session auth, CSRF, security headers, pytest
 3. ✅ Domain objects (pydantic, per spec §3–4), input models, repository, TR number counter, JSON API
 4. ✅ Reference-data cache over SLIM tables, analysis catalog, `scripts/seed_demo.py` (OSS demo data)
-5. ⬜ Port form + JS (per-request-type fields, catalog from cache), receipt, statuses, JSON view
-6. ⬜ Admin: customers (pick existing SLIM customers only), users (many per customer), profiles
-7. ⬜ Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS; README
+5. ⬜ (A) Bridge: portal-side adapter TRSubmission v2 -> slim-domain-oss v1 TRSubmission, plus a
+   test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
+6. ⬜ (B) Screens: customer form (per-request-type fields, choices from /api/reference), staff list,
+   receive, status changes, JSON view; admin customers/users/profiles. Portal only.
+7. ⏸ (C) Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS.
+   **ON HOLD — do not start.** The user wants more design on the demo's UX first; discuss before
+   any work here.
+8. ⏸ (D) Connect the other repos (report engine accepts a submission object, slim-lims "generate
+   report for TR", slim-domain adopts v2, status flows back). Modifies other repos — **needs the
+   user's explicit go-ahead.**
+
+Agreed order: A → B, then pause for UX design before C; D only when approved. The user is
+token-constrained: work in small, focused steps and keep replies short.
 
 ## How to Run
 
