@@ -125,3 +125,4 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
 .analysis-collapsed { display: flex; gap: 0.75em; align-items: center; flex-wrap: wrap; font-size: 0.9em; }
 .analysis-collapsed[hidden], #analysis-body[hidden] { display: none; }
 #analysis-done { margin-top: 0.5em; }
+.inline-form { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; }

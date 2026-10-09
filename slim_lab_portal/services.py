@@ -20,12 +20,13 @@ from slim_lab_portal.domain import (
     TRStatus,
     TRStatusEvent,
     TRSubmission,
+    match_chemical,
     transition,
 )
 from slim_lab_portal.models import User
 from slim_lab_portal.reference import WATER_CHEMICAL_NAME, ReferenceData
 from slim_lab_portal.repositories import StaleSubmission, SubmissionPage, TRSubmissionRepository
-from slim_lab_portal.schemas import SampleIn, StatusChangeIn, SubmissionIn
+from slim_lab_portal.schemas import ChemicalMatchIn, SampleIn, StatusChangeIn, SubmissionIn
 
 
 @dataclass(frozen=True)
@@ -223,6 +224,22 @@ class SubmissionService:
             raise Conflict(str(e)) from e
         except StaleSubmission as e:
             raise Conflict(f"{tr_number} was changed by someone else; reload and try again") from e
+
+
+    # ------------------------------------------------------------ chemical matching (staff)
+
+    def match_chemical(self, tr_number: str, position: int, data: ChemicalMatchIn, user: User) -> TRSubmission:
+        """Links one Chemical sample's free-text chemical to a SLIM chemical (staff only)."""
+        if not user.is_staff:
+            raise Forbidden("only lab staff can match chemicals")
+        submission = self.get(tr_number, user)
+        if self.reference.chemical(data.chemical_id) is None:
+            raise SubmissionRejected([FieldError(("chemical_id",), f"unknown chemical {data.chemical_id}")])
+        try:
+            match_chemical(submission, position, data.chemical_id)  # validates the change
+        except ValueError as e:
+            raise SubmissionRejected([FieldError(("chemical_id",), str(e))]) from e
+        return self.repo.record_chemical_match(submission.id, position, data.chemical_id)
 
 
 def _can_see(user: User, submission: TRSubmission) -> bool:

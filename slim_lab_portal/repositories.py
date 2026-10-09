@@ -91,6 +91,19 @@ class TRSubmissionRepository:
         self.session.expire_all()
         return self._load_row(before.id)
 
+    def record_chemical_match(self, submission_id: int, position: int, chemical_id: int) -> TRSubmission:
+        """Persists a workflow.match_chemical() result for one sample. The caller commits."""
+        result = self.session.execute(
+            update(TRSampleRow)
+            .where(TRSampleRow.submission_id == submission_id, TRSampleRow.position == position)
+            .values(chemical_id=chemical_id)
+        )
+        if result.rowcount != 1:
+            raise ValueError(f"sample {position} not found")
+        self.session.flush()
+        self.session.expire_all()
+        return self._load_row(submission_id)
+
     def _next_tr_number(self) -> str:
         value = self.session.execute(
             update(TRNumberCounter)

@@ -20,7 +20,8 @@
         {% for s in result.items %}
           <tr>
             <td><a href="{{ url_for('request_detail', tr_number=s.tr_number) }}">{{ s.tr_number }}</a>
-              {% if s.is_rush %}<span class="badge badge--rush">RUSH</span>{% endif %}</td>
+              {% if s.is_rush %}<span class="badge badge--rush">RUSH</span>{% endif %}
+              {% if current_user and current_user.is_staff and s.request_type.value == 1 and s.samples|selectattr("chemical_id", "none")|list %}<span class="badge badge--submitted" title="Chemical not matched to SLIM">match chemical</span>{% endif %}</td>
             {% if show_customer %}<td>{{ s.customer_snapshot.name }}{% if s.location %} ({{ s.location }}){% endif %}</td>{% endif %}
             <td>{{ s.request_type.label }}</td>
             <td>{{ s.samples|length }}</td>

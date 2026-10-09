@@ -39,11 +39,11 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
    `slim_lab_portal/bridge.py` (`to_slim_v1`, received TRs only); `tests/test_bridge.py` renders
    Chemical/Water/Wafer reports with the engine's own writer (skipped without the OSS packages).
-6. ✅ (B) Screens (first pass, awaiting the user's critique): customer form (per-request-type fields, choices from /api/reference), staff list,
-   receive, status changes, JSON view; admin customers/users/profiles. Portal only.
-   Done: routes.py pages, templates/requests/*, admin/home + users, static/js/request_form.js (vanilla JS,
-   no jQuery/Select2/Tagify), static/css/portal.css, e2e/request_flow.js. Not done: customer profiles
-   (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request instead.
+6. ✅ (B) Screens, reviewed with the user: customer form (per-request-type fields, choices from
+   /api/reference), request list/detail, staff receive + status changes + chemical matching, users,
+   JSON view. routes.py pages, templates/requests/*, admin/home + users, static/js/request_form.js
+   (vanilla JS), static/css/portal.css, e2e/request_flow.js. Not done (parked): customer profiles
+   (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request.
 7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
    slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
    repos — **needs the user's explicit go-ahead.**
@@ -52,8 +52,8 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    launches with several modules and can take one submission end to end: submission → receipt →
    analysis/report → delivery → invoice.
 
-Agreed order: backend done, including A. Next B (UX + frontend, designed with
-the user), then D when approved; C last. The user is token-constrained: small, focused steps,
+Agreed order: A and B done; this stage is wrapped up (merge the branch to main via PR). Next D
+when approved; C last. The user is token-constrained: small, focused steps,
 short replies.
 
 ## How to Run
@@ -125,7 +125,8 @@ docs/SLIM_DOMAIN_V2.md
   `error.html`; `/api/*` and `Accept: application/json` get JSON. Unauthenticated: HTML → 303 to
   `/login?next=...`, API → 401. Non-staff on staff routes → 403.
 - **API:** `POST /api/submissions` (201), `GET /api/submissions[?status&request_type&page]`,
-  `GET /api/submissions/{tr_number}`, `POST /api/submissions/{tr_number}/status`. Responses are
+  `GET /api/submissions/{tr_number}`, `POST /api/submissions/{tr_number}/status`,
+  `POST /api/submissions/{tr_number}/samples/{position}/chemical` (staff: match to SLIM). Responses are
   `TRSubmission.model_dump(mode="json")` — enums as ints. Customers only see their own customer's
   TRs (others → 404). Business-rule failures → 422 with `loc` pointing at the field; disallowed or
   concurrent status changes → 409.

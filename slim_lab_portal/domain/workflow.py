@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from slim_lab_portal.domain.enums import ActorType, TRStatus
+from slim_lab_portal.domain.enums import ActorType, RequestType, TRStatus
 from slim_lab_portal.domain.tr import Actor, TRReceipt, TRStatusEvent, TRSubmission
 
 ALLOWED_TRANSITIONS: dict[TRStatus, frozenset[TRStatus]] = {
@@ -65,3 +65,13 @@ def transition(
 def replace(model, **changes):
     """Like model_copy(update=...), but re-validates, so the invariants still hold."""
     return type(model)(**{**dict(model), **changes})
+
+
+def match_chemical(submission: TRSubmission, position: int, chemical_id: int) -> TRSubmission:
+    """Links a Chemical sample's free-text chemical to a SLIM chemical. The customer's text is kept."""
+    if submission.request_type is not RequestType.CHEMICAL:
+        raise ValueError("only Chemical requests have chemicals to match")
+    if not any(s.position == position for s in submission.samples):
+        raise ValueError(f"sample {position} does not exist")
+    samples = tuple(replace(s, chemical_id=chemical_id) if s.position == position else s for s in submission.samples)
+    return replace(submission, samples=samples)

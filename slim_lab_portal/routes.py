@@ -17,9 +17,9 @@ from slim_lab_portal.db import get_db
 from slim_lab_portal.domain import ActorType, RequestType, TRStatus, TRSubmission, allowed_next_statuses
 from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import ReferenceData
-from slim_lab_portal.schemas import StatusChangeIn
+from slim_lab_portal.schemas import ChemicalMatchIn, StatusChangeIn
 from slim_lab_portal.security import csrf_protect, hash_password
-from slim_lab_portal.services import Conflict, NotFound
+from slim_lab_portal.services import Conflict, Forbidden, NotFound, SubmissionRejected
 from slim_lab_portal.web import flash, render
 
 router = APIRouter(dependencies=[Depends(csrf_protect)])
@@ -65,6 +65,7 @@ def request_detail(request: Request, tr_number: str, user: RequireUser, service:
         "samples": _describe_samples(submission, reference),
         "next_statuses": allowed_next_statuses(submission.status, actor_type),
         "lab_today": service.lab_today(),
+        "chemicals": reference.chemical_choices() if user.is_staff else [],
         "TRStatus": TRStatus,
     })
 
@@ -100,6 +101,32 @@ def change_status_form(
     return _redirect(request, "request_detail", tr_number=tr_number)
 
 
+@router.post("/requests/{tr_number}/samples/{position}/chemical", name="match_chemical_form")
+def match_chemical_form(
+    request: Request,
+    tr_number: str,
+    position: int,
+    user: RequireStaff,
+    service: Service,
+    db: DB,
+    chemical_id: Annotated[str, Form()] = "",
+):
+    try:
+        if not chemical_id.isdigit():
+            raise ValueError("Choose a SLIM chemical.")
+        submission = service.match_chemical(tr_number, position, ChemicalMatchIn(chemical_id=int(chemical_id)), user)
+        db.commit()
+        sample = next(s for s in submission.samples if s.position == position)
+        flash(request, f"Sample {position} ({sample.sample_name}) matched.")
+    except (SubmissionRejected, Forbidden, ValueError) as e:
+        db.rollback()
+        flash(request, str(e), "error")
+    except NotFound:
+        flash(request, f"Testing Request {tr_number} not found.", "error")
+        return _redirect(request, "admin_home")
+    return _redirect(request, "request_detail", tr_number=tr_number)
+
+
 def _first_error(e: Exception) -> str:
     if isinstance(e, ValidationError):
         err = e.errors()[0]
@@ -111,9 +138,11 @@ def _describe_samples(submission: TRSubmission, reference: ReferenceData) -> lis
     """Names for the IDs a sample stores, for display only."""
     described = []
     for s in submission.samples:
+        chemical = reference.chemical(s.chemical_id) if s.chemical_id is not None else None
         analyses = [(reference.analysis(a).name if reference.analysis(a) else f"Analysis #{a}") for a in s.analysis_ids]
         elements = [(reference.element(e).symbol if reference.element(e) else f"#{e}") for e in s.additional_element_ids]
-        described.append({"sample": s, "analyses": analyses, "elements": elements})
+        described.append({"sample": s, "analyses": analyses, "elements": elements,
+                          "slim_chemical": chemical.name if chemical else None})
     return described
 
 

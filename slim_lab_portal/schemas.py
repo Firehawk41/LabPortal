@@ -53,6 +53,10 @@ class SubmissionIn(_Input):
     samples: Annotated[list[SampleIn], Field(min_length=1, max_length=200)]
 
 
+class ChemicalMatchIn(_Input):
+    chemical_id: int  # SLIM chemicals."ID"
+
+
 class StatusChangeIn(_Input):
     to_status: TRStatus
     note: Annotated[Text, StringConstraints(max_length=2000)] = ""

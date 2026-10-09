@@ -102,3 +102,38 @@ def test_staff_creates_and_deactivates_users(client, staff_user):
 def test_customers_cannot_open_staff_pages(client, customer_user):
     login(client, "jane@acme.example")
     assert client.get("/admin/users").status_code == 403
+
+
+def _unmatched_request(client):
+    login_api(client, "jane@acme.example")
+    body = payload(samples=[{"sample_name": "S-1", "chemical_name": "IPA semi grade", "processing_time": 7,
+                             "analysis_ids": [1]}])
+    assert client.post("/api/submissions", json=body).status_code == 201
+    client.post("/logout", data={"csrf_token": client.headers.pop("X-CSRF-Token")})
+
+
+def test_staff_matches_free_text_chemical(client, staff_user, customer_user):
+    _unmatched_request(client)
+    login(client, "staff@lab.example")
+    assert "match chemical" in client.get("/admin").text
+    page = client.get("/requests/TR00001").text
+    assert "Not matched to SLIM" in page and "IPA semi grade" in page
+    response = client.post("/requests/TR00001/samples/1/chemical",
+                           data={"csrf_token": csrf_from(page), "chemical_id": "3"})
+    assert "Sample 1 (S-1) matched." in response.text
+    assert "→ SLIM: Chemical 02" in response.text and "IPA semi grade" in response.text  # customer text kept
+    assert "match chemical" not in client.get("/admin").text
+
+
+def test_matching_rejects_unknown_chemical_and_customers(client, staff_user, customer_user):
+    _unmatched_request(client)
+    login(client, "staff@lab.example")
+    page = client.get("/requests/TR00001").text
+    response = client.post("/requests/TR00001/samples/1/chemical", data={"csrf_token": csrf_from(page), "chemical_id": "99"})
+    assert "unknown chemical 99" in response.text
+    response = client.post("/requests/TR00001/samples/9/chemical", data={"csrf_token": csrf_from(page), "chemical_id": "2"})
+    assert "sample 9 does not exist" in response.text
+    client.post("/logout", data={"csrf_token": csrf_from(client.get("/admin").text)})
+    login_api(client, "jane@acme.example")
+    assert client.post("/api/submissions/TR00001/samples/1/chemical", json={"chemical_id": 2}).status_code == 403
+    assert "Not matched" not in client.get("/requests/TR00001").text  # customers don't see matching UI

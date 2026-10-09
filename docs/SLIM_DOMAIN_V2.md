@@ -453,8 +453,9 @@ Notes:
 - Confirm the processing-time lists per request type (§3).
 - Confirm types/groups of analyses new to the portal catalog (§8).
 - Water packages: contents and whether customers may pick them.
-- Matching free-text chemicals: who matches an unmatched `chemical_name` to a SLIM chemical (or
-  creates one in SLIM), and where — see Parked ideas.
+- Matching free-text chemicals: staff match `chemical_name` to a SLIM chemical on the request page
+  (`workflow.match_chemical`; the customer's text is kept). New chemicals are created in SLIM, then
+  matched after a reference reload. The bridge refuses a TR until every Chemical sample is matched.
 
 ## 11. Parked ideas (raise with the user; don't build without a go-ahead)
 
@@ -467,6 +468,4 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
 - **Repeat a previous request**: copy TR00042 into a new form and change only the sample IDs — the
   improvement over Excel for customers who send the same panel regularly.
 - Upload sample IDs from a CSV/XLSX column (beyond pasting).
-- Staff screen to match unmatched chemicals (free text) to SLIM chemicals; the bridge refuses a
-  TR until every Chemical sample is matched. Creating new SLIM chemicals stays in SLIM.
 - Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.

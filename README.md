@@ -11,9 +11,23 @@ request from submission to invoice. Submissions are stored as Testing Request do
 the shape defined in [`docs/SLIM_DOMAIN_V2.md`](docs/SLIM_DOMAIN_V2.md), so the rest of the LIMS
 can consume them directly — no Excel in between.
 
-> **Status:** being rebuilt from a standalone Flask form ("LabPortal") into a FastAPI module of
-> the SLIM ecosystem. The skeleton (auth, CSRF, security headers, migrations, tests) is in place;
-> the submission form and lab workflow are being ported. See `CLAUDE.md` for progress.
+> **Status:** rebuilt from a standalone Flask form ("LabPortal") into a FastAPI module of the SLIM
+> ecosystem. Submission, lab workflow and reference data work end to end on the OSS demo data, and
+> received requests feed the OSS report engine (`slim_lab_portal/bridge.py`). See `CLAUDE.md` for
+> what's next.
+
+## What it does
+
+- **Customers** submit Testing Requests: one request type (Chemical / Water / Wafer), a
+  spreadsheet-like sample table (paste a column of IDs, Ctrl+D fills down), free-text chemical /
+  matrix, and one analysis panel that applies to the ticked samples or to all of them. Each request
+  gets a TR number (`TR00001`…) and its status is visible to the customer.
+- **Lab staff** receive samples, move requests through submitted → received → in progress →
+  partial report → complete report → invoiced (or cancelled), match free-text chemicals to SLIM,
+  and manage users.
+- **SLIM reference data** (customers, chemicals, elements, analyses) is read from the shared
+  database through a periodically refreshed cache.
+- **JSON API** at `/api/docs`; every request is also available as the TR domain object.
 
 ## OSS only
 
@@ -30,7 +44,7 @@ listed in `PORTAL_ALLOWED_DB_HOSTS`.
 | Domain | pydantic v2 (frozen models, shared shape with slim-domain) |
 | Database | PostgreSQL (shared with SLIM) or SQLite, SQLAlchemy 2, Alembic |
 | Auth | Signed-cookie sessions, bcrypt, CSRF tokens |
-| Frontend | Vanilla JS, jQuery, Select2, Tagify |
+| Frontend | Server-rendered pages + vanilla JS (no frameworks, no inline scripts) |
 
 ## Run locally
 
@@ -45,7 +59,9 @@ PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff -
 uvicorn --factory slim_lab_portal.main:create_app --reload
 ```
 
-Open http://127.0.0.1:8000 (API docs at `/api/docs`). Run the tests with `pytest`.
+Open http://127.0.0.1:8000 (API docs at `/api/docs`). Create a customer user with
+`python -m slim_lab_portal.cli create-customer-user --email you@customer.example --customer-id 1`.
+Run the tests with `pytest`; `e2e/request_flow.js` is a Playwright run-through of the form.
 
 With Docker: `docker compose up --build`, then create a staff user with
 `docker compose exec portal python -m slim_lab_portal.cli create-staff ...`.

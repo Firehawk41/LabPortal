@@ -21,7 +21,7 @@ from slim_lab_portal.domain import (
 )
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
-from slim_lab_portal.schemas import StatusChangeIn, SubmissionIn
+from slim_lab_portal.schemas import ChemicalMatchIn, StatusChangeIn, SubmissionIn
 from slim_lab_portal.security import csrf_protect
 from slim_lab_portal.services import Conflict, Forbidden, NotFound, SubmissionRejected, SubmissionService
 
@@ -78,6 +78,14 @@ def get_submission(tr_number: str, user: RequireUser, service: Service):
 @router.post("/{tr_number}/status", summary="Change status (receive, report, invoice, cancel)")
 def change_status(tr_number: str, data: StatusChangeIn, user: RequireUser, service: Service, db: DB):
     submission = service.change_status(tr_number, data, user)
+    db.commit()
+    return _dump(submission)
+
+
+@router.post("/{tr_number}/samples/{position}/chemical", summary="Match a sample's chemical to SLIM (staff)")
+def match_sample_chemical(tr_number: str, position: int, data: ChemicalMatchIn, user: RequireUser,
+                          service: Service, db: DB):
+    submission = service.match_chemical(tr_number, position, data, user)
     db.commit()
     return _dump(submission)
 
