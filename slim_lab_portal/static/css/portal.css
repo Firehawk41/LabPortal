@@ -109,20 +109,16 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
 .analysis-chip:hover, .analysis-chip:focus { border-style: solid; border-color: var(--color-primary); }
 .sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.12); }
 
-/* analysis matrix */
-.analysis-adder { display: flex; gap: 0.6em; align-items: center; flex-wrap: wrap; margin: 0.5em 0; }
-.analysis-adder label { font-weight: 600; }
-.analysis-adder input { font: inherit; min-width: 18em; padding: 0.35em 0.5em; border: 1px solid var(--color-border);
-  border-radius: 3px; background: var(--color-bg); color: var(--color-text); }
-.analysis-browser { border: 1px solid var(--color-border); border-radius: 4px; padding: 0.5em 0.75em; margin-bottom: 0.75em; }
-.sample-table th.analysis-col { text-align: center; white-space: normal; min-width: 5.5em; max-width: 8em;
-  font-size: 0.8em; line-height: 1.2; vertical-align: bottom; }
-.sample-table td.analysis-cell { text-align: center; }
-.sample-table td.analysis-cell input { width: 1.1em; height: 1.1em; }
-.col-remove { border: none; background: none; color: var(--color-text-muted); cursor: pointer; font-size: 0.9em; margin-left: 0.2em; }
-.col-remove:hover { color: #C53030; }
+/* selection bar + analysis panel targeting */
 .selection-bar { display: flex; gap: 0.9em; align-items: center; flex-wrap: wrap; padding: 0.5em 0.75em; margin: 0.5em 0;
-  border-radius: 4px; background: var(--color-primary); color: #fff; font-size: 0.85em; }
+  border-radius: 4px; border: 1px dashed var(--color-border); color: var(--color-text-muted); font-size: 0.85em; }
+.selection-bar.is-active { background: var(--color-primary); border: 1px solid var(--color-primary); color: #fff; }
+.selection-bar #selection-actions { display: inline-flex; gap: 0.9em; align-items: center; flex-wrap: wrap; }
+.selection-bar #selection-actions[hidden] { display: none; }
 .selection-bar label { display: flex; gap: 0.35em; align-items: center; }
-.selection-bar select { font: inherit; padding: 0.15em 0.3em; }
+.selection-bar select, .selection-bar input { font: inherit; padding: 0.15em 0.3em; }
 .selection-bar .link-button { color: #fff; }
+.bar-btn { background: #fff; color: var(--color-primary); border: 1px solid #fff; }
+.analyses.is-targeted { border: 2px solid var(--color-primary); }
+.analyses.is-targeted legend { color: var(--color-primary); }
+.sample-table td.analysis-summary { min-width: 10em; max-width: 18em; font-size: 0.9em; }

@@ -199,13 +199,13 @@ class TRSubmission(_Frozen):
             if wafer:
                 if s.wafer_size is None or s.reporting_unit is None:
                     errors.append(f"{where}: wafer samples need wafer_size and reporting_unit")
-                if s.chemical_id is not None:
+                if s.chemical_id is not None or s.chemical_name:
                     errors.append(f"{where}: wafer samples have no chemical")
             else:
                 if s.wafer_size is not None or s.reporting_unit is not None:
                     errors.append(f"{where}: wafer_size and reporting_unit are for wafer samples only")
-                if s.chemical_id is None:
-                    errors.append(f"{where}: chemical_id is required")
+                if not s.chemical_name.strip():
+                    errors.append(f"{where}: chemical_name is required")
             if s.water_package is not None and self.request_type is not RequestType.WATER:
                 errors.append(f"{where}: water_package is for water samples only")
         return errors

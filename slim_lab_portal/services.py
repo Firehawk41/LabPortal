@@ -155,23 +155,26 @@ class SubmissionService:
 
     def _check_sample(self, s: SampleIn, request_type: RequestType) -> tuple[list[FieldError], int | None, str]:
         errors: list[FieldError] = []
-        chemical_id, chemical_name = s.chemical_id, ""
+        chemical_id, chemical_name = None, ""
 
         if request_type is RequestType.CHEMICAL:
-            chemical = self.reference.chemical(s.chemical_id) if s.chemical_id is not None else None
-            if chemical is None:
-                errors.append(FieldError(("chemical_id",), "choose a chemical from the list"))
+            # Free text as the customer writes it. Linked to a SLIM chemical only on an exact
+            # (case-insensitive) name match; otherwise the lab matches or creates it later.
+            chemical_name = s.chemical_name
+            if not chemical_name:
+                errors.append(FieldError(("chemical_name",), "enter the chemical or matrix"))
             else:
-                chemical_name = chemical.name
+                match = self.reference.chemical_by_name(chemical_name)
+                chemical_id = match.id if match else None
         elif request_type is RequestType.WATER:
             water = self.reference.chemical_by_name(WATER_CHEMICAL_NAME)
             if water is None:
                 errors.append(FieldError(("chemical_id",), "the lab's Water chemical is not set up; contact the lab"))
-            elif s.chemical_id not in (None, water.id):
-                errors.append(FieldError(("chemical_id",), "water samples cannot have another chemical"))
             else:
                 chemical_id, chemical_name = water.id, water.name
 
+        if request_type is RequestType.WAFER and s.chemical_name:
+            errors.append(FieldError(("chemical_name",), "wafer samples have no chemical"))
         for j, analysis_id in enumerate(s.analysis_ids):
             analysis = self.reference.analysis(analysis_id)
             if analysis is None or not analysis.portal_selectable:

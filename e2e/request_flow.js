@@ -1,8 +1,8 @@
 // Browser run-through of the demo flow. Needs a running portal seeded with the OSS demo data
 // (scripts/seed_demo.py) plus a customer user a@demo.example (customer 1), password demo-password-123.
 // Run: NODE_PATH=$(npm root -g) node e2e/request_flow.js [shots-dir]     (PORTAL_URL to override the URL)
-// Customer enters 10 samples: sets up row 1 and two analyses, pastes 9 IDs, gives two samples an extra
-// analysis via the selection bar, unticks one cell, uses Ctrl+D, then submits.
+// Customer enters 10 samples: sets up row 1 and two analyses, pastes 9 IDs, selects two samples and gives
+// them an extra analysis and Next Day, gives sample 3 a free-text chemical, uses Ctrl+D, then submits.
 const { chromium } = require('playwright');
 const SHOTS = process.argv[2] || 'screenshots';
 require('fs').mkdirSync(SHOTS, { recursive: true });
@@ -19,22 +19,25 @@ const BASE = process.env.PORTAL_URL || 'http://127.0.0.1:8000';
   await page.check('#request_type-1');
   const row = (i) => page.locator('#samples tr').nth(i);
   await row(0).locator('input[data-f=sample_name]').fill('BATCH-01');
-  await row(0).locator('select[data-f=chemical_id]').selectOption({ label: 'Chemical 01' });
+  await row(0).locator('input[data-f=chemical_name]').fill('Chemical 01');
   await row(0).locator('select[data-f=processing_time]').selectOption({ label: 'Three Days' });
-  for (const name of ['36 Elements', 'pH']) {
-    await page.fill('#analysis-search', name); await page.press('#analysis-search', 'Enter');
-  }
+  console.log('bar (none selected):', await page.textContent('#selection-count'));
+  for (const name of ['36 Elements', 'pH']) await page.getByLabel(name, { exact: true }).check();
   await page.fill('#paste-ids', Array.from({ length: 9 }, (_, i) => `BATCH-${String(i + 2).padStart(2, '0')}`).join('\n'));
   await page.click('#add-pasted');
   console.log('rows:', await page.locator('#samples tr').count());
   // select rows 9 and 10, add 4 Anions to just those, set Next Day
   await row(8).locator('input[data-select]').check(); await row(9).locator('input[data-select]').check();
-  console.log('bar:', await page.textContent('#selection-count'), '|', await page.textContent('#adder-target'));
-  await page.fill('#analysis-search', '4 Anions'); await page.press('#analysis-search', 'Enter');
+  console.log('bar:', await page.textContent('#selection-count'), '|', await page.textContent('#analysis-legend'));
+  await page.getByLabel('4 Anions', { exact: true }).check();
   await page.selectOption('#bulk-processing-time', { label: 'Next Day' });
   await page.locator('#samples-section').screenshot({ path: `${SHOTS}/15_matrix_selected.png` });
   await page.click('#bulk-clear');
-  await row(2).locator('input[data-analysis]').nth(1).uncheck();           // sample 3: no pH
+  await row(2).locator('input[data-f=chemical_name]').fill('IPA, semiconductor grade');   // not in SLIM
+  await row(2).locator('[data-only]').click();                                 // select only sample 3
+  await page.getByLabel('pH', { exact: true }).uncheck();
+  console.log('legend:', await page.textContent('#analysis-legend'));
+  await page.click('#bulk-clear');
   const n3 = row(2).locator('input[data-f=additional_notes]');
   await row(1).locator('input[data-f=additional_notes]').fill('keep cold');
   await n3.focus(); await page.keyboard.press('Control+d');

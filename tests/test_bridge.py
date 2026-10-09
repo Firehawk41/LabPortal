@@ -149,3 +149,9 @@ def test_location_reaches_the_report_engine_via_file_name():
 def test_unreceived_submission_is_refused():
     with pytest.raises(NotReadyForReport):
         to_slim_v1(submission(tr_number="TR00046"))
+
+
+def test_unmatched_chemical_is_refused_until_matched():
+    with pytest.raises(NotReadyForReport, match="not yet matched"):
+        to_slim_v1(_received(submission(tr_number="TR00047", id=47,
+                                        samples=(sample(1, chemical_id=None, chemical_name="IPA"),))))

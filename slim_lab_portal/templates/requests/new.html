@@ -51,27 +51,17 @@
     <section class="form-section" id="samples-section" hidden>
       <h2>Samples</h2>
       <p class="hint">Paste a column of sample IDs from Excel to add one row per ID; new rows copy the row above.
-        <kbd>Ctrl</kbd>+<kbd>D</kbd> copies a cell from the row above. Tick rows to change several samples at once.</p>
+        <kbd>Ctrl</kbd>+<kbd>D</kbd> copies a cell from the row above.</p>
 
-      <div class="analysis-adder">
-        <label for="analysis-search">Add an analysis</label>
-        <input id="analysis-search" list="analysis-options" placeholder="Type to search, e.g. 36 Elements" autocomplete="off">
-        <datalist id="analysis-options"></datalist>
-        <button type="button" class="btn btn--secondary btn--small" id="browse-analyses" aria-expanded="false"
-                aria-controls="analysis-browser">Browse all</button>
-        <span class="hint" id="adder-target"></span>
-      </div>
-      <div id="analysis-browser" class="analysis-browser" hidden>
-        <div class="analysis-groups" id="analysis-groups"></div>
-      </div>
-
-      <div class="selection-bar" id="selection-bar" hidden role="region" aria-label="Selected samples">
+      <div class="selection-bar" id="selection-bar" role="region" aria-label="Sample selection" aria-live="polite">
         <strong id="selection-count"></strong>
-        <label>Processing time <select id="bulk-processing-time"></select></label>
-        <label id="bulk-chemical-wrap">Chemical <select id="bulk-chemical"></select></label>
-        <button type="button" class="btn btn--secondary btn--small" id="bulk-duplicate">Duplicate</button>
-        <button type="button" class="btn btn--secondary btn--small" id="bulk-remove">Remove</button>
-        <button type="button" class="link-button" id="bulk-clear">Clear selection</button>
+        <span id="selection-actions">
+          <label>Processing time <select id="bulk-processing-time"></select></label>
+          <label id="bulk-chemical-wrap">Chemical <input id="bulk-chemical" placeholder="type, then Enter" size="14"></label>
+          <button type="button" class="btn btn--small bar-btn" id="bulk-duplicate">Duplicate</button>
+          <button type="button" class="btn btn--small bar-btn" id="bulk-remove">Remove</button>
+          <button type="button" class="link-button" id="bulk-clear">Clear selection</button>
+        </span>
       </div>
 
       <div class="table-wrap">
@@ -86,7 +76,12 @@
           <textarea id="paste-ids" rows="1" placeholder="One ID per line"></textarea></label>
         <button type="button" class="btn btn--secondary btn--small" id="add-pasted">Add these</button>
       </div>
-      <div data-path="analysis_ids"></div>
+
+      <fieldset class="analyses" id="analysis-panel" data-path="analysis_ids">
+        <legend id="analysis-legend">Analyses</legend>
+        <p class="hint" id="analysis-note"></p>
+        <div class="analysis-groups" id="analysis-groups"></div>
+      </fieldset>
     </section>
 
     <button type="submit" class="btn btn--primary" id="submit-button" disabled>Submit request</button>

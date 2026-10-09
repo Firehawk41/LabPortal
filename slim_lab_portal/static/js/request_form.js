@@ -1,8 +1,8 @@
 // New testing request form. Choices come from GET /api/reference (the SLIM reference cache);
 // the form posts JSON to POST /api/submissions and shows the server's field errors.
-// Samples are a spreadsheet-like table with one checkbox column per analysis in use (the
-// "analysis matrix"): add analyses by searching (or "Browse all"); tick rows to change several
-// samples at once from the selection bar; paste a column of IDs to add rows; Ctrl+D fills down.
+// Samples are a spreadsheet-like table (paste a column of IDs, Ctrl+D fills down, new rows copy
+// the row above). Analyses are chosen in one grouped panel that applies to the ticked rows, or to
+// every sample when none are ticked; the selection bar always says which.
 // No inline scripts (CSP): this file is loaded with <script src> and wires everything up.
 (() => {
   "use strict";
@@ -17,13 +17,12 @@
 
   let ref = null;           // /api/reference payload
   let requestType = null;   // RequestType value (1 Chemical, 2 Water, 3 Wafer)
-  let samples = [];         // [{key, sample_name, chemical_id, wafer_size, reporting_unit, processing_time,
+  let samples = [];         // [{key, sample_name, chemical_name, wafer_size, reporting_unit, processing_time,
                             //   requested_time, additional_element_ids, additional_notes, analyses: Set}]
-  let columns = [];          // analysis ids shown as matrix columns, in the order they were added
-  const selected = new Set(); // keys of ticked rows (selection bar acts on these)
+  const selected = new Set(); // keys of ticked rows; the analysis panel and selection bar act on these
   let nextKey = 1;
 
-  const TEXT_FIELDS = ["sample_name", "chemical_id", "wafer_size", "reporting_unit", "processing_time",
+  const TEXT_FIELDS = ["sample_name", "chemical_name", "wafer_size", "reporting_unit", "processing_time",
                        "requested_time", "additional_element_ids", "additional_notes"];
 
   // ------------------------------------------------------------ helpers
@@ -80,18 +79,6 @@
 
   const targets = () => (selected.size ? samples.filter((s) => selected.has(s.key)) : samples);
 
-  function addColumn(id) {
-    if (!columns.includes(id)) columns.push(id);
-    targets().forEach((s) => s.analyses.add(id));   // selected rows, or every row when none ticked
-    render();
-  }
-
-  function removeColumn(id) {
-    columns = columns.filter((c) => c !== id);
-    samples.forEach((s) => s.analyses.delete(id));
-    render();
-  }
-
   // ------------------------------------------------------------ table
 
   function cell(sample, field, control) {
@@ -112,25 +99,10 @@
     all.indeterminate = selected.size > 0 && selected.size < samples.length;
     const thAll = el("th", { scope: "col" }); thAll.append(all); head.append(thAll);
     head.append(el("th", { scope: "col" }, "#"), el("th", { scope: "col" }, "Sample ID"));
-    if (requestType === 1) head.append(el("th", { scope: "col" }, "Chemical"));
+    if (requestType === 1) head.append(el("th", { scope: "col" }, "Chemical / matrix"));
     if (requestType === 3) head.append(el("th", { scope: "col" }, "Wafer size"), el("th", { scope: "col" }, "Units"));
-    head.append(el("th", { scope: "col" }, "Processing time"), el("th", { scope: "col" }, "Report by"));
-    columns.forEach((id) => {
-      const th = el("th", { scope: "col", class: "analysis-col" });
-      const count = samples.filter((s) => s.analyses.has(id)).length;
-      const box = el("input", { type: "checkbox", "data-col-all": String(id),
-                                "aria-label": `${analysisName(id)} for every sample` });
-      box.checked = count === samples.length;
-      box.indeterminate = count > 0 && count < samples.length;
-      const remove = el("button", { type: "button", class: "col-remove", "data-col-remove": String(id),
-                                    "aria-label": `Remove ${analysisName(id)}` }, "✕");
-      const name = el("span", { class: "col-name" }, analysisName(id));
-      th.append(name, el("br"), box, remove);
-      head.append(th);
-    });
-    if (!columns.length) head.append(el("th", { scope: "col", class: "muted" }, "Analyses"));
-    head.append(el("th", { scope: "col" }, "Extra elements"), el("th", { scope: "col" }, "Notes"),
-                el("th", { scope: "col" }, ""));
+    ["Processing time", "Report by", "Analyses", "Extra elements", "Notes", ""].forEach((t) =>
+      head.append(el("th", { scope: "col" }, t)));
   }
 
   function render() {
@@ -146,8 +118,7 @@
       tr.append(el("td", { class: "row-no" }, String(i + 1)));
       tr.append(cell(s, "sample_name", el("input", { maxlength: "100", placeholder: "Sample ID" })));
       if (requestType === 1) {
-        const sel = el("select"); fillSelect(sel, ref.chemicals.map((c) => [c.id, c.name]), "Choose…");
-        tr.append(cell(s, "chemical_id", sel));
+        tr.append(cell(s, "chemical_name", el("input", { maxlength: "200", placeholder: "e.g. IPA" })));
       }
       if (requestType === 3) {
         const size = el("select"); fillSelect(size, ref.wafer_sizes.map((w) => [w.value, w.label]), "Choose…");
@@ -160,13 +131,12 @@
       const tdTime = cell(s, "requested_time", time);
       time.disabled = !timeLimited(s);
       tr.append(tdTime);
-      columns.forEach((id) => {
-        const box = el("input", { type: "checkbox", "data-analysis": String(id), "data-key": String(s.key),
-                                  "aria-label": `${analysisName(id)} for sample ${i + 1}` });
-        box.checked = s.analyses.has(id);
-        const td = el("td", { class: "analysis-cell", "data-f": "analysis_ids" }); td.append(box); tr.append(td);
-      });
-      if (!columns.length) tr.append(el("td", { class: "muted analysis-cell", "data-f": "analysis_ids" }, "—"));
+      // Clicking a row's analyses selects just that sample.
+      const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" });
+      summary.append(el("button", { type: "button", class: "link-button", "data-only": String(s.key),
+                                    title: "Select only this sample" },
+                        [...s.analyses].map(analysisName).join(", ") || "None yet"));
+      tr.append(summary);
       tr.append(cell(s, "additional_element_ids", el("input", { placeholder: "e.g. Fe, Li", size: "8" })));
       tr.append(cell(s, "additional_notes", el("input", { maxlength: "2000", placeholder: "optional" })));
       const remove = el("button", { type: "button", class: "btn btn--secondary btn--small", "data-remove": String(s.key),
@@ -175,28 +145,44 @@
       const tdRemove = el("td"); tdRemove.append(remove); tr.append(tdRemove);
       tbody.append(tr);
     });
-    renderSelectionBar();
-    syncBrowser();
+    renderSelection();
   }
 
-  function renderSelectionBar() {
+  function renderSelection() {
     const n = selected.size;
-    $("selection-bar").hidden = n === 0;
-    $("selection-count").textContent = `${n} sample${n === 1 ? "" : "s"} selected`;
+    const total = samples.length;
+    const bar = $("selection-bar");
+    bar.classList.toggle("is-active", n > 0);
+    $("selection-actions").hidden = n === 0;
     $("bulk-chemical-wrap").hidden = requestType !== 1;
-    $("adder-target").textContent = n
-      ? `Adds to the ${n} selected sample${n === 1 ? "" : "s"}`
-      : "Adds to every sample";
+    $("selection-count").textContent = n
+      ? `${n} of ${total} sample${total === 1 ? "" : "s"} selected`
+      : `Analyses apply to all ${total} sample${total === 1 ? "" : "s"} — tick rows to choose specific samples`;
+
+    const chosen = targets();
+    const names = chosen.map((s) => s.sample_name || `sample ${samples.indexOf(s) + 1}`);
+    $("analysis-legend").textContent = n
+      ? `Analyses for ${n} selected sample${n === 1 ? "" : "s"}: ${names.slice(0, 4).join(", ")}${n > 4 ? ", …" : ""}`
+      : `Analyses for all ${total} sample${total === 1 ? "" : "s"}`;
+    $("analysis-panel").classList.toggle("is-targeted", n > 0);
+    const differ = chosen.some((s) => s.analyses.size !== chosen[0].analyses.size ||
+                                      [...s.analyses].some((id) => !chosen[0].analyses.has(id)));
+    $("analysis-note").textContent = differ
+      ? "These samples have different analyses (partly ticked boxes). Ticking a box gives it to all of them."
+      : "";
+    document.querySelectorAll("#analysis-groups input").forEach((box) => {
+      const id = Number(box.value);
+      const count = chosen.filter((s) => s.analyses.has(id)).length;
+      box.checked = chosen.length > 0 && count === chosen.length;
+      box.indeterminate = count > 0 && count < chosen.length;
+    });
   }
 
-  function buildAnalysisChoices() {
-    const info = typeInfo();
-    const list = $("analysis-options");
-    list.replaceChildren(...info.analyses.map((a) => el("option", { value: a.name }, a.group)));
+  function buildAnalysisPanel() {
     const groups = $("analysis-groups");
     groups.replaceChildren();
     const byGroup = new Map();
-    info.analyses.forEach((a) => {
+    typeInfo().analyses.forEach((a) => {
       if (!byGroup.has(a.group)) byGroup.set(a.group, []);
       byGroup.get(a.group).push(a);
     });
@@ -204,7 +190,7 @@
       const box = el("div", { class: "analysis-group" });
       box.append(el("h4", {}, group || "Other"));
       items.forEach((a) => {
-        const id = `browse-${a.id}`;
+        const id = `analysis-${a.id}`;
         const input = el("input", { type: "checkbox", id, value: String(a.id) });
         const lab = el("label", { for: id, class: "check" });
         if (a.description && a.description !== a.name) lab.title = a.description;
@@ -215,46 +201,18 @@
     });
   }
 
-  function syncBrowser() {
-    // In "Browse all", a tick means "this analysis is a column".
-    document.querySelectorAll("#analysis-groups input").forEach((box) => {
-      box.checked = columns.includes(Number(box.value));
-    });
-  }
-
   // ------------------------------------------------------------ events
 
-  $("analysis-search").addEventListener("change", (event) => {
-    const name = event.target.value.trim().toLowerCase();
-    const match = typeInfo().analyses.find((a) => a.name.toLowerCase() === name);
-    if (match) { addColumn(match.id); event.target.value = ""; }
-  });
-  $("analysis-search").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") { event.preventDefault(); event.target.dispatchEvent(new Event("change")); }
-  });
-  $("browse-analyses").addEventListener("click", (event) => {
-    const browser = $("analysis-browser");
-    browser.hidden = !browser.hidden;
-    event.target.setAttribute("aria-expanded", String(!browser.hidden));
-    event.target.textContent = browser.hidden ? "Browse all" : "Hide list";
-  });
   $("analysis-groups").addEventListener("change", (event) => {
     const id = Number(event.target.value);
-    if (event.target.checked) addColumn(id); else removeColumn(id);
+    targets().forEach((s) => (event.target.checked ? s.analyses.add(id) : s.analyses.delete(id)));
+    render();
   });
 
   $("sample-head").addEventListener("change", (event) => {
-    if (event.target.id === "select-all") {
-      samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
-      render();
-    } else if (event.target.dataset.colAll) {
-      const id = Number(event.target.dataset.colAll);
-      samples.forEach((s) => (event.target.checked ? s.analyses.add(id) : s.analyses.delete(id)));
-      render();
-    }
-  });
-  $("sample-head").addEventListener("click", (event) => {
-    if (event.target.dataset.colRemove) removeColumn(Number(event.target.dataset.colRemove));
+    if (event.target.id !== "select-all") return;
+    samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
+    render();
   });
 
   tbody.addEventListener("input", (event) => {
@@ -268,21 +226,22 @@
       time.disabled = !timeLimited(sample);
       time.value = sample.requested_time;
     }
+    if (f === "sample_name" && selected.has(sample.key)) renderSelection();
   });
   tbody.addEventListener("change", (event) => {
-    const t = event.target;
-    if (t.dataset.select) {
-      const key = Number(t.dataset.select);
-      if (t.checked) selected.add(key); else selected.delete(key);
-      render();
-    } else if (t.dataset.analysis) {
-      const sample = samples.find((s) => String(s.key) === t.dataset.key);
-      const id = Number(t.dataset.analysis);
-      if (t.checked) sample.analyses.add(id); else sample.analyses.delete(id);
-      renderHead();
-    }
+    if (!event.target.dataset.select) return;
+    const key = Number(event.target.dataset.select);
+    if (event.target.checked) selected.add(key); else selected.delete(key);
+    render();
   });
   tbody.addEventListener("click", (event) => {
+    if (event.target.dataset.only) {
+      selected.clear();
+      selected.add(Number(event.target.dataset.only));
+      render();
+      $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
     const key = event.target.dataset.remove;
     if (!key || samples.length === 1) return;
     samples = samples.filter((s) => String(s.key) !== key);
@@ -305,43 +264,40 @@
   // Ctrl+D (Cmd+D on a Mac): copy this cell's value from the row above, like Excel's fill down.
   tbody.addEventListener("keydown", (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "d") return;
-    const { f, key, analysis } = event.target.dataset;
-    if (!f && !analysis) return;
+    const { f, key } = event.target.dataset;
+    if (!f) return;
     event.preventDefault();
     const index = samples.findIndex((s) => String(s.key) === key);
     if (index < 1) return;
-    const [above, here] = [samples[index - 1], samples[index]];
-    if (analysis) {
-      const id = Number(analysis);
-      if (above.analyses.has(id)) here.analyses.add(id); else here.analyses.delete(id);
-    } else {
-      here[f] = above[f];
-      if (f === "processing_time" && !timeLimited(here)) here.requested_time = "";
-    }
+    samples[index][f] = samples[index - 1][f];
+    if (f === "processing_time" && !timeLimited(samples[index])) samples[index].requested_time = "";
     render();
-    const again = tbody.querySelector(analysis ? `[data-key="${key}"][data-analysis="${analysis}"]`
-                                               : `[data-key="${key}"][data-f="${f}"]`);
+    const again = tbody.querySelector(`[data-key="${key}"][data-f="${f}"]`);
     if (again) again.focus();
   });
 
   // selection bar
+  const selectedSamples = () => samples.filter((s) => selected.has(s.key));
   $("bulk-processing-time").addEventListener("change", (event) => {
     if (!event.target.value) return;
-    samples.filter((s) => selected.has(s.key)).forEach((s) => {
+    selectedSamples().forEach((s) => {
       s.processing_time = event.target.value;
       if (!timeLimited(s)) s.requested_time = "";
     });
     event.target.value = "";
     render();
   });
-  $("bulk-chemical").addEventListener("change", (event) => {
-    if (!event.target.value) return;
-    samples.filter((s) => selected.has(s.key)).forEach((s) => { s.chemical_id = event.target.value; });
+  $("bulk-chemical").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const value = event.target.value.trim();
+    if (!value) return;
+    selectedSamples().forEach((s) => { s.chemical_name = value; });
     event.target.value = "";
     render();
   });
   $("bulk-duplicate").addEventListener("click", () => {
-    const copies = samples.filter((s) => selected.has(s.key)).map((s) => ({
+    const copies = selectedSamples().map((s) => ({
       ...s, key: nextKey++, sample_name: s.sample_name ? `${s.sample_name} (copy)` : "", analyses: new Set(s.analyses),
     }));
     samples.push(...copies);
@@ -361,7 +317,7 @@
   $("add-sample").addEventListener("click", () => {
     newSample();
     render();
-    tbody.lastElementChild.querySelector('[data-f="sample_name"] input, input[data-f="sample_name"]').focus();
+    tbody.lastElementChild.querySelector('input[data-f="sample_name"]').focus();
   });
   $("add-pasted").addEventListener("click", () => {
     const names = splitLines($("paste-ids").value);
@@ -378,16 +334,15 @@
     const info = typeInfo();
     const allowedTimes = new Set(info.processing_times.map((p) => String(p.value)));
     const allowedAnalyses = new Set(info.analyses.map((a) => a.id));
-    columns = columns.filter((id) => allowedAnalyses.has(id));
     samples.forEach((s) => {   // keep what still applies to the new type
       if (!allowedTimes.has(String(s.processing_time))) s.processing_time = "";
       s.analyses = new Set([...s.analyses].filter((id) => allowedAnalyses.has(id)));
-      if (changed) { s.chemical_id = ""; s.wafer_size = ""; s.reporting_unit = ""; }
+      if (changed && value !== 1) s.chemical_name = "";
+      if (changed) { s.wafer_size = ""; s.reporting_unit = ""; }
     });
     if (!samples.length) newSample();
     fillSelect($("bulk-processing-time"), info.processing_times.map((p) => [p.value, p.label]), "Set…");
-    fillSelect($("bulk-chemical"), ref.chemicals.map((c) => [c.id, c.name]), "Set…");
-    buildAnalysisChoices();
+    buildAnalysisPanel();
     render();
   }
 
@@ -452,7 +407,7 @@
           analysis_ids: [...s.analyses],
           additional_element_ids: elementIds.filter((id) => id !== undefined),
         };
-        if (requestType === 1) sample.chemical_id = intOrNull(s.chemical_id);
+        if (requestType === 1) sample.chemical_name = (s.chemical_name || "").trim();
         if (requestType === 3) {
           sample.wafer_size = intOrNull(s.wafer_size);
           sample.reporting_unit = intOrNull(s.reporting_unit);
@@ -468,7 +423,7 @@
     customer_id: "Customer", request_type: "Request type", location: "Site", customer_contact: "Contact name",
     customer_phone: "Phone", payment_method: "Payment", po_number: "PO number", results_to: "Results to",
     results_cc: "Results cc", invoice_to: "Invoice to", invoice_cc: "Invoice cc",
-    expected_arrival_date: "Expected arrival", sample_name: "Sample ID", chemical_id: "Chemical",
+    expected_arrival_date: "Expected arrival", sample_name: "Sample ID", chemical_name: "Chemical",
     processing_time: "Processing time", requested_time: "Report-by time", analysis_ids: "Analyses",
     additional_element_ids: "Extra elements", wafer_size: "Wafer size", reporting_unit: "Units",
     additional_notes: "Notes", samples: "Samples",

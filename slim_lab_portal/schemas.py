@@ -25,7 +25,9 @@ class _Input(BaseModel):
 
 class SampleIn(_Input):
     sample_name: Annotated[Text, StringConstraints(min_length=1, max_length=100)]
-    chemical_id: int | None = None  # Chemical: required. Water: set by the portal. Wafer: none.
+    # Chemical: the customer's own words, free text (matched to SLIM later). Water: set by the
+    # portal. Wafer: none.
+    chemical_name: Annotated[Text, StringConstraints(max_length=200)] = ""
     processing_time: ProcessingTime
     requested_time: time | None = None  # "report by" time, Next Day Time Limited only
     additional_notes: Annotated[Text, StringConstraints(max_length=2000)] = ""

@@ -178,8 +178,8 @@ Who did something. Replaces initials-only `created_by` for submissions.
 | `id` | int = 0 | `id` | DB id; 0 until stored |
 | `position` | int | — | 1-based order within the submission |
 | `sample_name` | str | `sample_name` | The customer's own sample ID, free text, max 100 |
-| `chemical_id` | int \| None | `chemical_id` | Required for Chemical. Water: the "Water" chemical. Wafer: `None` |
-| `chemical_name` | str | `form_chemical_name` | As submitted, for the record. Never used for lookup |
+| `chemical_id` | int \| None | `chemical_id` | SLIM chemical, once matched. Chemical: set automatically only on an exact (case-insensitive) name match, otherwise `None` until the lab matches it. Water: the "Water" chemical. Wafer: `None` |
+| `chemical_name` | str | `form_chemical_name` | Chemical: the customer's free text (chemical / matrix), required. Water: "Water". Wafer: "" |
 | `processing_time` | ProcessingTime | same | Must be allowed for the request type |
 | `requested_time` | `time` \| None | `requested_time: str` | "Report by" time. Required iff `TIME_LIMITED`, otherwise `None` |
 | `additional_notes` | str | same | Notes only — never scanned for analysis names |
@@ -269,7 +269,8 @@ Computed:
 2. `requested_time` is set iff `processing_time == TIME_LIMITED`.
 3. Wafer samples: `wafer_size` and `reporting_unit` set, `chemical_id` is `None`,
    `water_package` is `None`. Non-wafer samples: `wafer_size` / `reporting_unit` are `None`.
-4. Chemical and Water samples: `chemical_id` set. Only Water samples may have a `water_package`.
+4. Chemical and Water samples: `chemical_name` non-blank (`chemical_id` may be `None` until matched).
+   Only Water samples may have a `water_package`.
 5. `po_number` non-blank iff `payment_method == PURCHASE_ORDER`.
 6. `receipt` is `None` while SUBMITTED and set for RECEIVED through INVOICED. A CANCELLED
    submission has a receipt only if it was cancelled after being received.
@@ -452,8 +453,8 @@ Notes:
 - Confirm the processing-time lists per request type (§3).
 - Confirm types/groups of analyses new to the portal catalog (§8).
 - Water packages: contents and whether customers may pick them.
-- Chemicals not in the list: for now the customer must pick an existing chemical; a
-  "not listed — describe it" path needs a lab decision on who creates the SLIM record.
+- Matching free-text chemicals: who matches an unmatched `chemical_name` to a SLIM chemical (or
+  creates one in SLIM), and where — see Parked ideas.
 
 ## 11. Parked ideas (raise with the user; don't build without a go-ahead)
 
@@ -466,4 +467,6 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
 - **Repeat a previous request**: copy TR00042 into a new form and change only the sample IDs — the
   improvement over Excel for customers who send the same panel regularly.
 - Upload sample IDs from a CSV/XLSX column (beyond pasting).
+- Staff screen to match unmatched chemicals (free text) to SLIM chemicals; the bridge refuses a
+  TR until every Chemical sample is matched. Creating new SLIM chemicals stays in SLIM.
 - Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.

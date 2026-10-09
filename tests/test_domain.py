@@ -151,8 +151,9 @@ def test_wafer_sample_rules():
 def test_chemical_sample_rules():
     with pytest.raises(ValidationError, match="wafer samples only"):
         submission(samples=(sample(1, wafer_size=1, reporting_unit=1),))
-    with pytest.raises(ValidationError, match="chemical_id is required"):
-        submission(samples=(sample(1, chemical_id=None),))
+    assert submission(samples=(sample(1, chemical_id=None, chemical_name="IPA, unlisted"),))  # unmatched is fine
+    with pytest.raises(ValidationError, match="chemical_name is required"):
+        submission(samples=(sample(1, chemical_id=None, chemical_name=" "),))
 
 
 def test_water_package_only_on_water():

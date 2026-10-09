@@ -15,8 +15,8 @@ def payload(**overrides):
         "results_to": ["jane@acme.example"],
         "invoice_to": ["ap@acme.example"],
         "samples": [
-            {"sample_name": "S-001", "chemical_id": 2, "processing_time": 7, "analysis_ids": [1, 2]},
-            {"sample_name": "S-002", "chemical_id": 3, "processing_time": 3, "requested_time": "15:00",
+            {"sample_name": "S-001", "chemical_name": "Chemical 01", "processing_time": 7, "analysis_ids": [1, 2]},
+            {"sample_name": "S-002", "chemical_name": "chemical 02", "processing_time": 3, "requested_time": "15:00",
              "analysis_ids": [1], "additional_element_ids": [26]},
         ],
     }
@@ -78,11 +78,11 @@ def test_unknown_fields_rejected(as_customer):
 
 
 def test_business_rule_errors_point_at_fields(as_customer):
-    bad = payload(samples=[{"sample_name": "S-1", "chemical_id": 99, "processing_time": 7, "analysis_ids": [3, 4, 50]}])
+    bad = payload(samples=[{"sample_name": "S-1", "processing_time": 7, "analysis_ids": [3, 4, 50]}])
     response = as_customer.post("/api/submissions", json=bad)
     assert response.status_code == 422
     detail = {tuple(d["loc"]): d["msg"] for d in response.json()["detail"]}
-    assert detail[("body", "samples", 0, "chemical_id")] == "choose a chemical from the list"
+    assert detail[("body", "samples", 0, "chemical_name")] == "enter the chemical or matrix"
     assert "TOC is not offered for Chemical" in detail[("body", "samples", 0, "analysis_ids", 0)]
     assert detail[("body", "samples", 0, "analysis_ids", 1)] == "unknown analysis 4"  # not portal-selectable
     assert detail[("body", "samples", 0, "analysis_ids", 2)] == "unknown analysis 50"
@@ -99,9 +99,7 @@ def test_water_samples_get_the_water_chemical(as_customer):
     response = as_customer.post("/api/submissions", json=body)
     assert response.status_code == 201, response.text
     assert response.json()["samples"][0]["chemical_id"] == 1
-    bad = payload(request_type=2, samples=[{"sample_name": "W-1", "chemical_id": 2, "processing_time": 8,
-                                            "analysis_ids": [3]}])
-    assert as_customer.post("/api/submissions", json=bad).status_code == 422
+    assert response.json()["samples"][0]["chemical_name"] == "Water"
 
 
 def test_wafer_submission(as_customer):
@@ -225,3 +223,18 @@ def test_future_receipt_date_is_refused(as_staff):
     response = as_staff.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": tomorrow})
     assert response.status_code == 409
     assert "future" in response.json()["detail"]
+
+
+def test_chemical_is_free_text_matched_when_known(as_customer):
+    body = payload(samples=[
+        {"sample_name": "S-1", "chemical_name": "  CHEMICAL 01 ", "processing_time": 7, "analysis_ids": [1]},
+        {"sample_name": "S-2", "chemical_name": "IPA 99.9% semi grade", "processing_time": 7, "analysis_ids": [1]},
+    ])
+    samples = as_customer.post("/api/submissions", json=body).json()["samples"]
+    assert (samples[0]["chemical_id"], samples[0]["chemical_name"]) == (2, "CHEMICAL 01")  # as typed, linked
+    assert (samples[1]["chemical_id"], samples[1]["chemical_name"]) == (None, "IPA 99.9% semi grade")
+
+
+def test_chemical_ids_are_not_accepted_from_customers(as_customer):
+    body = payload(samples=[{"sample_name": "S-1", "chemical_id": 2, "processing_time": 7, "analysis_ids": [1]}])
+    assert as_customer.post("/api/submissions", json=body).status_code == 422

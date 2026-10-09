@@ -145,6 +145,11 @@ docs/SLIM_DOMAIN_V2.md
 ## Key Decisions (see the spec for detail)
 
 - One request type (Chemical / Water / Wafer) per submission; per-type sample fields.
+- Chemical / matrix is free text from the customer; linked to a SLIM chemical only on an exact name
+  match, otherwise matched (or created in SLIM) by the lab later. The bridge refuses unmatched TRs.
+- Form UX (user-approved): samples table + one grouped analysis panel that applies to the ticked
+  rows (or all rows when none are ticked); Gmail-style selection bar. The analysis-matrix layout
+  was tried and rejected — too many analysis combinations for per-analysis columns.
 - TR numbers `TR00001`… from a gapless counter row locked in the submit transaction.
 - Statuses: submitted → received → in progress → partial report (repeatable) → complete report
   → invoiced (terminal, staff only); cancelled (customer may cancel only while submitted).
