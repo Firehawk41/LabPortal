@@ -156,7 +156,8 @@ def test_status_workflow_over_http(client, staff_user, customer_user):
     login_api(client, "staff@lab.example")
     client.post("/api/submissions", json=payload(customer_id=1))
 
-    response = client.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": "2026-10-07"})
+    assert client.post("/api/submissions/TR00001/status", json={"to_status": 2}).status_code == 409  # check-in only
+    response = client.post("/api/submissions/TR00001/check-in", json={"date_received": "2026-10-07"})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["receipt"]["received_by"] == "JM"  # defaults to the staff user's initials
@@ -220,7 +221,7 @@ def test_future_receipt_date_is_refused(as_staff):
 
     as_staff.post("/api/submissions", json=payload(customer_id=1))
     tomorrow = (date.today() + timedelta(days=2)).isoformat()
-    response = as_staff.post("/api/submissions/TR00001/status", json={"to_status": 2, "date_received": tomorrow})
+    response = as_staff.post("/api/submissions/TR00001/check-in", json={"date_received": tomorrow})
     assert response.status_code == 409
     assert "future" in response.json()["detail"]
 
@@ -238,3 +239,33 @@ def test_chemical_is_free_text_matched_when_known(as_customer):
 def test_chemical_ids_are_not_accepted_from_customers(as_customer):
     body = payload(samples=[{"sample_name": "S-1", "chemical_id": 2, "processing_time": 7, "analysis_ids": [1]}])
     assert as_customer.post("/api/submissions", json=body).status_code == 422
+
+
+def test_check_in_requires_every_chemical_matched(client, staff_user, customer_user):
+    login_api(client, "jane@acme.example")
+    body = payload(samples=[
+        {"sample_name": "S-1", "chemical_name": "Chemical 01", "processing_time": 7, "analysis_ids": [1]},
+        {"sample_name": "S-2", "chemical_name": "IPA semi grade", "processing_time": 7, "analysis_ids": [1]},
+    ])
+    client.post("/api/submissions", json=body)
+    assert client.post("/api/submissions/TR00001/check-in", json={"date_received": "2026-10-07"}).status_code == 403
+    client.post("/logout", data={"csrf_token": client.headers.pop("X-CSRF-Token")})
+
+    login_api(client, "staff@lab.example")
+    response = client.post("/api/submissions/TR00001/check-in", json={"date_received": "2026-10-07"})
+    assert response.status_code == 409 and "sample(s) 2" in response.json()["detail"]
+    bad = client.post("/api/submissions/TR00001/check-in", json={"date_received": "2026-10-07", "chemicals": {"2": 99}})
+    assert bad.status_code == 422
+    ok = client.post("/api/submissions/TR00001/check-in",
+                     json={"date_received": "2026-10-07", "chemicals": {"2": 3}, "note": "cooler at 4 C"})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["status"] == 2 and body["receipt"]["received_by"] == "JM"
+    assert [(s["chemical_name"], s["chemical_id"]) for s in body["samples"]] == [("Chemical 01", 2), ("IPA semi grade", 3)]
+    assert body["status_history"][-1]["note"] == "cooler at 4 C"
+
+
+def test_water_and_wafer_check_in_needs_no_matching(as_staff):
+    as_staff.post("/api/submissions", json=payload(customer_id=1, request_type=2, samples=[
+        {"sample_name": "W-1", "processing_time": 8, "analysis_ids": [3]}]))
+    assert as_staff.post("/api/submissions/TR00001/check-in", json={"date_received": "2026-10-07"}).status_code == 200

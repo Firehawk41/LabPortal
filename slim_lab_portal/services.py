@@ -20,13 +20,14 @@ from slim_lab_portal.domain import (
     TRStatus,
     TRStatusEvent,
     TRSubmission,
+    check_in,
     match_chemical,
     transition,
 )
 from slim_lab_portal.models import User
 from slim_lab_portal.reference import WATER_CHEMICAL_NAME, ReferenceData
 from slim_lab_portal.repositories import StaleSubmission, SubmissionPage, TRSubmissionRepository
-from slim_lab_portal.schemas import ChemicalMatchIn, SampleIn, StatusChangeIn, SubmissionIn
+from slim_lab_portal.schemas import CheckInIn, ChemicalMatchIn, SampleIn, StatusChangeIn, SubmissionIn
 
 
 @dataclass(frozen=True)
@@ -203,7 +204,36 @@ class SubmissionService:
 
     # ------------------------------------------------------------ status
 
+    def check_in(self, tr_number: str, data: CheckInIn, user: User) -> TRSubmission:
+        """Staff accept a submitted request into the LIMS: receipt + chemical matching, one step."""
+        if not user.is_staff:
+            raise Forbidden("only lab staff can check in requests")
+        before = self.get(tr_number, user)
+        unknown = [cid for cid in data.chemicals.values() if self.reference.chemical(cid) is None]
+        if unknown:
+            raise SubmissionRejected([FieldError(("chemicals",), f"unknown chemical {cid}") for cid in unknown])
+        try:
+            after = check_in(
+                before,
+                actor=actor_for(user),
+                at=self.clock(),
+                date_received=data.date_received,
+                received_by=data.received_by or user.initials,
+                chemical_matches=data.chemicals,
+                note=data.note,
+                today=self.lab_today(),
+            )
+            return self.repo.record_transition(before, after)
+        except TransitionNotAllowed as e:
+            raise Conflict(str(e)) from e
+        except ValueError as e:
+            raise SubmissionRejected([FieldError(("chemicals",), str(e))]) from e
+        except StaleSubmission as e:
+            raise Conflict(f"{tr_number} was changed by someone else; reload and try again") from e
+
     def change_status(self, tr_number: str, data: StatusChangeIn, user: User) -> TRSubmission:
+        if data.to_status is TRStatus.RECEIVED:
+            raise Conflict("requests are received by checking them in (POST .../check-in)")
         before = self.get(tr_number, user)
         received_by = data.received_by
         if data.to_status is TRStatus.RECEIVED and not received_by and user.is_staff:

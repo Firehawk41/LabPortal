@@ -226,4 +226,7 @@ class TRSubmission(_Frozen):
             errors.append("a submission that is not yet received cannot have a receipt")
         if self.status in _RECEIPT_REQUIRED and self.receipt is None:
             errors.append(f"status {self.status.label} requires a receipt")
+        if (self.status in _RECEIPT_REQUIRED and self.request_type is RequestType.CHEMICAL
+                and any(s.chemical_id is None for s in self.samples)):
+            errors.append("every chemical must be matched to SLIM once the request is checked in")
         return errors

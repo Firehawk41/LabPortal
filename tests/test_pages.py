@@ -52,10 +52,14 @@ def test_customer_cannot_open_other_customers_request(client, staff_user, custom
 def test_staff_receives_and_progresses(submitted):
     login(submitted, "staff@lab.example")
     detail = submitted.get("/requests/TR00001").text
-    assert "Mark received" in detail and 'name="received_by" value="JM"' in detail
-    response = _post_status(submitted, "/requests/TR00001", to_status="2",
-                            date_received=date.today().isoformat(), received_by="JM", note="2 bottles")
-    assert "TR00001 is now received." in response.text
+    assert "Check in" in detail and "Mark received" not in detail
+    page = submitted.get("/requests/TR00001/check-in").text
+    assert 'name="received_by" value="JM"' in page and "Accept into LIMS" in page
+    assert 'name="chemical_1"' in page and 'value="2" selected' in page  # exact name pre-matched
+    response = submitted.post("/requests/TR00001/check-in", data={
+        "csrf_token": csrf_from(page), "date_received": date.today().isoformat(), "received_by": "JM",
+        "chemical_1": "2", "chemical_2": "3", "note": "2 bottles"})
+    assert "TR00001 checked in: 2 sample(s)" in response.text
     assert "2 bottles" in response.text
     response = _post_status(submitted, "/requests/TR00001", to_status="3")
     assert "is now in progress" in response.text
@@ -64,8 +68,10 @@ def test_staff_receives_and_progresses(submitted):
 def test_bad_status_change_is_flashed_not_500(submitted):
     login(submitted, "staff@lab.example")
     future = (date.today() + timedelta(days=3)).isoformat()
-    response = _post_status(submitted, "/requests/TR00001", to_status="2", date_received=future, received_by="JM")
-    assert response.status_code == 200 and "future" in response.text
+    page = submitted.get("/requests/TR00001/check-in").text
+    response = submitted.post("/requests/TR00001/check-in", data={
+        "csrf_token": csrf_from(page), "date_received": future, "received_by": "JM", "chemical_1": "2", "chemical_2": "3"})
+    assert response.status_code == 200 and "future" in response.text and "Accept into LIMS" in response.text
     response = _post_status(submitted, "/requests/TR00001", to_status="6")
     assert "cannot move" in response.text
 
@@ -137,3 +143,19 @@ def test_matching_rejects_unknown_chemical_and_customers(client, staff_user, cus
     login_api(client, "jane@acme.example")
     assert client.post("/api/submissions/TR00001/samples/1/chemical", json={"chemical_id": 2}).status_code == 403
     assert "Not matched" not in client.get("/requests/TR00001").text  # customers don't see matching UI
+
+
+def test_check_in_page_blocks_unmatched_and_is_staff_only(client, staff_user, customer_user):
+    _unmatched_request(client)
+    login(client, "jane@acme.example")
+    assert client.get("/requests/TR00001/check-in").status_code == 403
+    client.post("/logout", data={"csrf_token": csrf_from(client.get("/").text)})
+    login(client, "staff@lab.example")
+    page = client.get("/requests/TR00001/check-in").text
+    response = client.post("/requests/TR00001/check-in", data={
+        "csrf_token": csrf_from(page), "date_received": date.today().isoformat(), "received_by": "JM", "chemical_1": ""})
+    assert "match the chemical for sample(s) 1" in response.text
+    response = client.post("/requests/TR00001/check-in", data={
+        "csrf_token": csrf_from(page), "date_received": date.today().isoformat(), "received_by": "JM", "chemical_1": "3"})
+    assert "checked in" in response.text
+    assert "is already received" in client.get("/requests/TR00001/check-in").text

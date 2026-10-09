@@ -105,7 +105,7 @@ Allowed transitions (`ALLOWED_TRANSITIONS`):
 
 | From | To | Who |
 |---|---|---|
-| SUBMITTED | RECEIVED (records the receipt) | staff |
+| SUBMITTED | RECEIVED — **check-in** only: records the receipt and matches every chemical to SLIM in one step (`workflow.check_in`) | staff |
 | SUBMITTED | CANCELLED | staff, or a user of the submitting customer |
 | RECEIVED | IN_PROGRESS, CANCELLED | staff |
 | IN_PROGRESS | PARTIAL_REPORT, COMPLETE_REPORT, CANCELLED | staff |
@@ -272,9 +272,10 @@ Computed:
 4. Chemical and Water samples: `chemical_name` non-blank (`chemical_id` may be `None` until matched).
    Only Water samples may have a `water_package`.
 5. `po_number` non-blank iff `payment_method == PURCHASE_ORDER`.
-6. `receipt` is `None` while SUBMITTED and set for RECEIVED through INVOICED. A CANCELLED
+6. A Chemical request that is RECEIVED or later has every sample's `chemical_id` set (checked in).
+7. `receipt` is `None` while SUBMITTED and set for RECEIVED through INVOICED. A CANCELLED
    submission has a receipt only if it was cancelled after being received.
-7. Sample positions are 1..n with no gaps; sample names are unique within a submission
+8. Sample positions are 1..n with no gaps; sample names are unique within a submission
    (case-insensitive).
 
 Rules that need a clock (checked in the workflow/service with the lab's local date, `LAB_TIMEZONE`):

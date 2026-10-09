@@ -26,6 +26,7 @@ from slim_lab_portal.domain.workflow import (
     ALLOWED_TRANSITIONS,
     TransitionNotAllowed,
     allowed_next_statuses,
+    check_in,
     match_chemical,
     transition,
 )
@@ -35,5 +36,5 @@ __all__ = [
     "PaymentMethod", "ProcessingTime", "ReportingUnit", "RequestType", "SubmissionSource",
     "TRReceipt", "TRSample", "TRStatus", "TRStatusEvent", "TRSubmission", "TransitionNotAllowed",
     "WaferSize", "WaterPackage", "add_working_days", "allowed_next_statuses", "format_tr_number",
-    "match_chemical", "transition",
+    "check_in", "match_chemical", "transition",
 ]

@@ -21,7 +21,7 @@ from slim_lab_portal.domain import (
 )
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
-from slim_lab_portal.schemas import ChemicalMatchIn, StatusChangeIn, SubmissionIn
+from slim_lab_portal.schemas import CheckInIn, ChemicalMatchIn, StatusChangeIn, SubmissionIn
 from slim_lab_portal.security import csrf_protect
 from slim_lab_portal.services import Conflict, Forbidden, NotFound, SubmissionRejected, SubmissionService
 
@@ -75,9 +75,16 @@ def get_submission(tr_number: str, user: RequireUser, service: Service):
     return _dump(service.get(tr_number, user))
 
 
-@router.post("/{tr_number}/status", summary="Change status (receive, report, invoice, cancel)")
+@router.post("/{tr_number}/status", summary="Change status (in progress, report, invoice, cancel)")
 def change_status(tr_number: str, data: StatusChangeIn, user: RequireUser, service: Service, db: DB):
     submission = service.change_status(tr_number, data, user)
+    db.commit()
+    return _dump(submission)
+
+
+@router.post("/{tr_number}/check-in", summary="Check in: accept a submitted request into the LIMS (staff)")
+def check_in_submission(tr_number: str, data: CheckInIn, user: RequireUser, service: Service, db: DB):
+    submission = service.check_in(tr_number, data, user)
     db.commit()
     return _dump(submission)
 

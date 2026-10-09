@@ -17,7 +17,7 @@ from slim_lab_portal.db import get_db
 from slim_lab_portal.domain import ActorType, RequestType, TRStatus, TRSubmission, allowed_next_statuses
 from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import ReferenceData
-from slim_lab_portal.schemas import ChemicalMatchIn, StatusChangeIn
+from slim_lab_portal.schemas import CheckInIn, ChemicalMatchIn, StatusChangeIn
 from slim_lab_portal.security import csrf_protect, hash_password
 from slim_lab_portal.services import Conflict, Forbidden, NotFound, SubmissionRejected
 from slim_lab_portal.web import flash, render
@@ -99,6 +99,61 @@ def change_status_form(
         flash(request, f"Testing Request {tr_number} not found.", "error")
         return _redirect(request, "index")
     return _redirect(request, "request_detail", tr_number=tr_number)
+
+
+@router.get("/requests/{tr_number}/check-in", name="check_in_page")
+def check_in_page(request: Request, tr_number: str, user: RequireStaff, service: Service, reference: Reference):
+    try:
+        submission = service.get(tr_number, user)
+    except NotFound:
+        return render(request, "error.html", {"status": 404, "message": f"Testing Request {tr_number} not found."}, 404)
+    if submission.status is not TRStatus.SUBMITTED:
+        flash(request, f"{submission.tr_number} is already {submission.status.label.lower()}.", "error")
+        return _redirect(request, "request_detail", tr_number=tr_number)
+    return render(request, "requests/check_in.html", {
+        "s": submission,
+        "samples": _describe_samples(submission, reference),
+        "chemicals": reference.chemical_choices(),
+        "lab_today": service.lab_today(),
+        "TRStatus": TRStatus,
+    })
+
+
+async def form_fields(request: Request) -> dict[str, str]:
+    """The whole posted form (for forms with dynamic field names, e.g. chemical_<position>)."""
+    form = await request.form()
+    return {k: v for k, v in form.items() if isinstance(v, str)}
+
+
+@router.post("/requests/{tr_number}/check-in", name="check_in_form")
+def check_in_form(
+    request: Request,
+    tr_number: str,
+    user: RequireStaff,
+    service: Service,
+    db: DB,
+    form: Annotated[dict[str, str], Depends(form_fields)],
+):
+    try:
+        matches = {int(k.removeprefix("chemical_")): int(v)
+                   for k, v in form.items() if k.startswith("chemical_") and v.strip().isdigit()}
+        data = CheckInIn(
+            date_received=date.fromisoformat(form.get("date_received", "")),
+            received_by=form.get("received_by") or None,
+            chemicals=matches,
+            note=form.get("note", ""),
+        )
+        submission = service.check_in(tr_number, data, user)
+        db.commit()
+        flash(request, f"{submission.tr_number} checked in: {len(submission.samples)} sample(s) logged into the LIMS.")
+        return _redirect(request, "request_detail", tr_number=tr_number)
+    except (ValidationError, ValueError, Conflict, SubmissionRejected) as e:
+        db.rollback()
+        flash(request, _first_error(e) if isinstance(e, ValidationError) else str(e), "error")
+    except NotFound:
+        flash(request, f"Testing Request {tr_number} not found.", "error")
+        return _redirect(request, "admin_home")
+    return _redirect(request, "check_in_page", tr_number=tr_number)
 
 
 @router.post("/requests/{tr_number}/samples/{position}/chemical", name="match_chemical_form")

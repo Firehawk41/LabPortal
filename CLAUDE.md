@@ -46,7 +46,9 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request.
 7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
    slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
-   repos — **needs the user's explicit go-ahead.**
+   repos — **needs the user's explicit go-ahead.** Includes: the report engine should print actual
+   results from the DB instead of a blank report, generated once results exist ("data is in") —
+   to be designed in a separate conversation.
 8. ⏸ (C) Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS.
    **DEFERRED — do not start.** Waits until the other modules are ready to bolt in, so the demo
    launches with several modules and can take one submission end to end: submission → receipt →
@@ -152,6 +154,9 @@ docs/SLIM_DOMAIN_V2.md
   rows (or all rows when none are ticked); Gmail-style selection bar. The analysis-matrix layout
   was tried and rejected — too many analysis combinations for per-analysis columns.
 - TR numbers `TR00001`… from a gapless counter row locked in the submit transaction.
+- **Check-in** (staff, `/requests/{tr}/check-in`, `POST /api/submissions/{tr}/check-in`) is the only
+  way to RECEIVED: receipt (date, initials, note) + every chemical matched to SLIM, one step —
+  the portal's equivalent of the VBA/manual log-in. "Reject" = cancel with a reason.
 - Statuses: submitted → received → in progress → partial report (repeatable) → complete report
   → invoiced (terminal, staff only); cancelled (customer may cancel only while submitted).
 - Payment: purchase order (PO number, also used for billing codes) or credit card (lab calls;

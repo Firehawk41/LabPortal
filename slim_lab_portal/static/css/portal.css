@@ -126,3 +126,4 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
 .analysis-collapsed[hidden], #analysis-body[hidden] { display: none; }
 #analysis-done { margin-top: 0.5em; }
 .inline-form { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; }
+.check-in-table select { min-width: 13em; font: inherit; padding: 0.25em 0.35em; }

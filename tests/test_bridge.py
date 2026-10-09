@@ -151,7 +151,9 @@ def test_unreceived_submission_is_refused():
         to_slim_v1(submission(tr_number="TR00046"))
 
 
-def test_unmatched_chemical_is_refused_until_matched():
-    with pytest.raises(NotReadyForReport, match="not yet matched"):
-        to_slim_v1(_received(submission(tr_number="TR00047", id=47,
-                                        samples=(sample(1, chemical_id=None, chemical_name="IPA"),))))
+def test_unmatched_chemical_cannot_be_checked_in():
+    """The bridge can only ever see matched chemicals: check-in refuses unmatched ones."""
+    from slim_lab_portal.domain import TransitionNotAllowed
+
+    with pytest.raises(TransitionNotAllowed, match="match the chemical"):
+        _received(submission(tr_number="TR00047", id=47, samples=(sample(1, chemical_id=None, chemical_name="IPA"),)))

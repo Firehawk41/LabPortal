@@ -50,6 +50,10 @@ def transition(
 
     receipt = submission.receipt
     if to_status is TRStatus.RECEIVED:
+        unmatched = [str(s.position) for s in submission.samples
+                     if submission.request_type is RequestType.CHEMICAL and s.chemical_id is None]
+        if unmatched:
+            raise TransitionNotAllowed(f"match the chemical for sample(s) {', '.join(unmatched)} before checking in")
         if date_received is None or not received_by:
             raise TransitionNotAllowed("receiving samples needs date_received and received_by")
         if today is not None and date_received > today:
@@ -75,3 +79,23 @@ def match_chemical(submission: TRSubmission, position: int, chemical_id: int) ->
         raise ValueError(f"sample {position} does not exist")
     samples = tuple(replace(s, chemical_id=chemical_id) if s.position == position else s for s in submission.samples)
     return replace(submission, samples=samples)
+
+
+def check_in(
+    submission: TRSubmission,
+    *,
+    actor: Actor,
+    at: datetime,
+    date_received: date,
+    received_by: str,
+    chemical_matches: dict[int, int] | None = None,
+    note: str = "",
+    today: date | None = None,
+) -> TRSubmission:
+    """Accepts a submitted request into the LIMS: applies the staff's chemical matches
+    ({sample position: SLIM chemical ID}) and records the receipt, in one step. Fails unless
+    every Chemical sample ends up matched."""
+    for position, chemical_id in (chemical_matches or {}).items():
+        submission = match_chemical(submission, position, chemical_id)
+    return transition(submission, TRStatus.RECEIVED, actor=actor, at=at, note=note,
+                      date_received=date_received, received_by=received_by, today=today)

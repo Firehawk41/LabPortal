@@ -70,7 +70,8 @@ class TRSubmissionRepository:
         return self._load_row(row.id)
 
     def record_transition(self, before: TRSubmission, after: TRSubmission) -> TRSubmission:
-        """Persists a workflow.transition() result. Raises StaleSubmission if the stored status
+        """Persists a workflow.transition() / check_in() result (status, receipt, chemical matches,
+        new events). Raises StaleSubmission if the stored status
         is no longer `before.status` (a concurrent update won)."""
         new_events = after.status_history[len(before.status_history):]
         if before.id != after.id or not new_events:
@@ -85,6 +86,14 @@ class TRSubmissionRepository:
         )
         if result.rowcount != 1:
             raise StaleSubmission(before.tr_number)
+        old_matches = {s.position: s.chemical_id for s in before.samples}
+        for sample in after.samples:
+            if sample.chemical_id != old_matches.get(sample.position):
+                self.session.execute(
+                    update(TRSampleRow)
+                    .where(TRSampleRow.submission_id == before.id, TRSampleRow.position == sample.position)
+                    .values(chemical_id=sample.chemical_id)
+                )
         for event in new_events:
             self.session.add(_event_row(before.id, event))
         self.session.flush()

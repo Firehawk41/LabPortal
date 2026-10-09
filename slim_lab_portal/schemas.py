@@ -53,6 +53,15 @@ class SubmissionIn(_Input):
     samples: Annotated[list[SampleIn], Field(min_length=1, max_length=200)]
 
 
+class CheckInIn(_Input):
+    """Staff accept a submitted request into the LIMS (receipt + chemical matching)."""
+
+    date_received: date
+    received_by: Annotated[Text, StringConstraints(max_length=10)] | None = None  # defaults to the user's initials
+    chemicals: dict[int, int] = {}  # sample position -> SLIM chemical ID
+    note: Annotated[Text, StringConstraints(max_length=2000)] = ""
+
+
 class ChemicalMatchIn(_Input):
     chemical_id: int  # SLIM chemicals."ID"
 
