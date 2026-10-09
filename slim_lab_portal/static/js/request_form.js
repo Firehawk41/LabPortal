@@ -20,6 +20,7 @@
   let samples = [];         // [{key, sample_name, chemical_name, wafer_size, reporting_unit, processing_time,
                             //   requested_time, additional_element_ids, additional_notes, analyses: Set}]
   const selected = new Set(); // keys of ticked rows; the analysis panel and selection bar act on these
+  let panelOpen = true;       // analysis panel expanded, or collapsed to a one-line summary
   let nextKey = 1;
 
   const TEXT_FIELDS = ["sample_name", "chemical_name", "wafer_size", "reporting_unit", "processing_time",
@@ -165,6 +166,16 @@
       ? `Analyses for ${n} selected sample${n === 1 ? "" : "s"}: ${names.slice(0, 4).join(", ")}${n > 4 ? ", …" : ""}`
       : `Analyses for all ${total} sample${total === 1 ? "" : "s"}`;
     $("analysis-panel").classList.toggle("is-targeted", n > 0);
+    // Collapsed: one line saying what the targeted samples get, plus "Edit analyses".
+    $("analysis-collapsed").hidden = panelOpen;
+    $("analysis-body").hidden = !panelOpen;
+    if (!panelOpen) {
+      const first = chosen[0];
+      const same = first && chosen.every((s) => s.analyses.size === first.analyses.size &&
+                                               [...s.analyses].every((id) => first.analyses.has(id)));
+      $("analysis-summary-text").textContent = !same ? "Different for each sample — see the Analyses column."
+        : [...first.analyses].map(analysisName).join(", ") || "None chosen yet.";
+    }
     const differ = chosen.some((s) => s.analyses.size !== chosen[0].analyses.size ||
                                       [...s.analyses].some((id) => !chosen[0].analyses.has(id)));
     $("analysis-note").textContent = differ
@@ -203,6 +214,14 @@
 
   // ------------------------------------------------------------ events
 
+  const openPanel = () => { panelOpen = true; };
+  $("analysis-edit").addEventListener("click", () => { panelOpen = true; renderSelection(); });
+  $("analysis-done").addEventListener("click", () => {
+    panelOpen = false;
+    renderSelection();
+    $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
   $("analysis-groups").addEventListener("change", (event) => {
     const id = Number(event.target.value);
     targets().forEach((s) => (event.target.checked ? s.analyses.add(id) : s.analyses.delete(id)));
@@ -212,6 +231,7 @@
   $("sample-head").addEventListener("change", (event) => {
     if (event.target.id !== "select-all") return;
     samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
+    if (event.target.checked) openPanel();
     render();
   });
 
@@ -231,13 +251,14 @@
   tbody.addEventListener("change", (event) => {
     if (!event.target.dataset.select) return;
     const key = Number(event.target.dataset.select);
-    if (event.target.checked) selected.add(key); else selected.delete(key);
+    if (event.target.checked) { selected.add(key); openPanel(); } else selected.delete(key);
     render();
   });
   tbody.addEventListener("click", (event) => {
     if (event.target.dataset.only) {
       selected.clear();
       selected.add(Number(event.target.dataset.only));
+      openPanel();
       render();
       $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
@@ -312,7 +333,11 @@
     selected.clear();
     render();
   });
-  $("bulk-clear").addEventListener("click", () => { selected.clear(); render(); });
+  $("bulk-clear").addEventListener("click", () => {
+    selected.clear();
+    if (samples[0] && samples[0].analyses.size) panelOpen = false;
+    render();
+  });
 
   $("add-sample").addEventListener("click", () => {
     newSample();

@@ -79,8 +79,15 @@
 
       <fieldset class="analyses" id="analysis-panel" data-path="analysis_ids">
         <legend id="analysis-legend">Analyses</legend>
-        <p class="hint" id="analysis-note"></p>
-        <div class="analysis-groups" id="analysis-groups"></div>
+        <div class="analysis-collapsed" id="analysis-collapsed" hidden>
+          <span id="analysis-summary-text"></span>
+          <button type="button" class="btn btn--secondary btn--small" id="analysis-edit">Edit analyses</button>
+        </div>
+        <div id="analysis-body">
+          <p class="hint" id="analysis-note"></p>
+          <div class="analysis-groups" id="analysis-groups"></div>
+          <button type="button" class="btn btn--primary btn--small" id="analysis-done">Done</button>
+        </div>
       </fieldset>
     </section>
 

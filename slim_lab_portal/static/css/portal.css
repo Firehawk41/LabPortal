@@ -122,3 +122,6 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
 .analyses.is-targeted { border: 2px solid var(--color-primary); }
 .analyses.is-targeted legend { color: var(--color-primary); }
 .sample-table td.analysis-summary { min-width: 10em; max-width: 18em; font-size: 0.9em; }
+.analysis-collapsed { display: flex; gap: 0.75em; align-items: center; flex-wrap: wrap; font-size: 0.9em; }
+.analysis-collapsed[hidden], #analysis-body[hidden] { display: none; }
+#analysis-done { margin-top: 0.5em; }

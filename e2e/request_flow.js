@@ -23,6 +23,8 @@ const BASE = process.env.PORTAL_URL || 'http://127.0.0.1:8000';
   await row(0).locator('select[data-f=processing_time]').selectOption({ label: 'Three Days' });
   console.log('bar (none selected):', await page.textContent('#selection-count'));
   for (const name of ['36 Elements', 'pH']) await page.getByLabel(name, { exact: true }).check();
+  await page.click('#analysis-done');
+  console.log('collapsed:', await page.textContent('#analysis-collapsed'));
   await page.fill('#paste-ids', Array.from({ length: 9 }, (_, i) => `BATCH-${String(i + 2).padStart(2, '0')}`).join('\n'));
   await page.click('#add-pasted');
   console.log('rows:', await page.locator('#samples tr').count());
@@ -33,6 +35,7 @@ const BASE = process.env.PORTAL_URL || 'http://127.0.0.1:8000';
   await page.selectOption('#bulk-processing-time', { label: 'Next Day' });
   await page.locator('#samples-section').screenshot({ path: `${SHOTS}/15_matrix_selected.png` });
   await page.click('#bulk-clear');
+  console.log('collapsed after clear:', await page.isVisible('#analysis-collapsed'));
   await row(2).locator('input[data-f=chemical_name]').fill('IPA, semiconductor grade');   // not in SLIM
   await row(2).locator('[data-only]').click();                                 // select only sample 3
   await page.getByLabel('pH', { exact: true }).uncheck();
