@@ -101,16 +101,28 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
   color: var(--color-primary); text-decoration: underline dotted; }
 .sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.10); }
 #select-all-samples { margin-bottom: 0.5em; }
-.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75em; margin: 0.25em 0 0.75em; }
-@media (max-width: 640px) { .mode-switch { grid-template-columns: 1fr; } }
-.mode-option { display: flex; gap: 0.6em; align-items: flex-start; padding: 0.6em 0.8em; cursor: pointer;
-  border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); font-size: 0.9em; }
-.mode-option:has(input:checked) { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
-.sample-stepper { display: flex; gap: 0.5em; align-items: center; margin-bottom: 0.5em; }
-.sample-stepper label { display: flex; gap: 0.5em; align-items: center; font-weight: 600; }
-.sample-stepper select { font: inherit; padding: 0.25em 0.4em; }
+.sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.10); }
+#select-all-samples { margin-bottom: 0.5em; }
 .analysis-chip { font: inherit; font-size: 0.95em; text-align: left; cursor: pointer; width: 100%;
   padding: 0.25em 0.45em; border: 1px dashed var(--color-border); border-radius: 3px;
   background: transparent; color: var(--color-text); }
 .analysis-chip:hover, .analysis-chip:focus { border-style: solid; border-color: var(--color-primary); }
 .sample-table tr.is-selected td { background: rgba(43, 91, 142, 0.12); }
+
+/* analysis matrix */
+.analysis-adder { display: flex; gap: 0.6em; align-items: center; flex-wrap: wrap; margin: 0.5em 0; }
+.analysis-adder label { font-weight: 600; }
+.analysis-adder input { font: inherit; min-width: 18em; padding: 0.35em 0.5em; border: 1px solid var(--color-border);
+  border-radius: 3px; background: var(--color-bg); color: var(--color-text); }
+.analysis-browser { border: 1px solid var(--color-border); border-radius: 4px; padding: 0.5em 0.75em; margin-bottom: 0.75em; }
+.sample-table th.analysis-col { text-align: center; white-space: normal; min-width: 5.5em; max-width: 8em;
+  font-size: 0.8em; line-height: 1.2; vertical-align: bottom; }
+.sample-table td.analysis-cell { text-align: center; }
+.sample-table td.analysis-cell input { width: 1.1em; height: 1.1em; }
+.col-remove { border: none; background: none; color: var(--color-text-muted); cursor: pointer; font-size: 0.9em; margin-left: 0.2em; }
+.col-remove:hover { color: #C53030; }
+.selection-bar { display: flex; gap: 0.9em; align-items: center; flex-wrap: wrap; padding: 0.5em 0.75em; margin: 0.5em 0;
+  border-radius: 4px; background: var(--color-primary); color: #fff; font-size: 0.85em; }
+.selection-bar label { display: flex; gap: 0.35em; align-items: center; }
+.selection-bar select { font: inherit; padding: 0.15em 0.3em; }
+.selection-bar .link-button { color: #fff; }

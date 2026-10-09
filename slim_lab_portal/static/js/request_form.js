@@ -1,7 +1,8 @@
 // New testing request form. Choices come from GET /api/reference (the SLIM reference cache);
 // the form posts JSON to POST /api/submissions and shows the server's field errors.
-// Samples are a spreadsheet-like table: paste a column of IDs to add rows, Ctrl+D fills down,
-// new rows copy the row above, and analyses are chosen for every sample or one sample at a time.
+// Samples are a spreadsheet-like table with one checkbox column per analysis in use (the
+// "analysis matrix"): add analyses by searching (or "Browse all"); tick rows to change several
+// samples at once from the selection bar; paste a column of IDs to add rows; Ctrl+D fills down.
 // No inline scripts (CSP): this file is loaded with <script src> and wires everything up.
 (() => {
   "use strict";
@@ -18,9 +19,8 @@
   let requestType = null;   // RequestType value (1 Chemical, 2 Water, 3 Wafer)
   let samples = [];         // [{key, sample_name, chemical_id, wafer_size, reporting_unit, processing_time,
                             //   requested_time, additional_element_ids, additional_notes, analyses: Set}]
-  let analysisMode = "all";   // "all": the panel edits every sample; "one": it edits `currentKey` only
-  let currentKey = null;
-  const editedSamples = () => (analysisMode === "all" ? samples : samples.filter((s) => s.key === currentKey));
+  let columns = [];          // analysis ids shown as matrix columns, in the order they were added
+  const selected = new Set(); // keys of ticked rows (selection bar acts on these)
   let nextKey = 1;
 
   const TEXT_FIELDS = ["sample_name", "chemical_id", "wafer_size", "reporting_unit", "processing_time",
@@ -78,6 +78,20 @@
     render();
   }
 
+  const targets = () => (selected.size ? samples.filter((s) => selected.has(s.key)) : samples);
+
+  function addColumn(id) {
+    if (!columns.includes(id)) columns.push(id);
+    targets().forEach((s) => s.analyses.add(id));   // selected rows, or every row when none ticked
+    render();
+  }
+
+  function removeColumn(id) {
+    columns = columns.filter((c) => c !== id);
+    samples.forEach((s) => s.analyses.delete(id));
+    render();
+  }
+
   // ------------------------------------------------------------ table
 
   function cell(sample, field, control) {
@@ -90,11 +104,45 @@
     return td;
   }
 
+  function renderHead() {
+    const head = $("sample-head");
+    head.replaceChildren();
+    const all = el("input", { type: "checkbox", id: "select-all", "aria-label": "Select all samples" });
+    all.checked = samples.length > 0 && selected.size === samples.length;
+    all.indeterminate = selected.size > 0 && selected.size < samples.length;
+    const thAll = el("th", { scope: "col" }); thAll.append(all); head.append(thAll);
+    head.append(el("th", { scope: "col" }, "#"), el("th", { scope: "col" }, "Sample ID"));
+    if (requestType === 1) head.append(el("th", { scope: "col" }, "Chemical"));
+    if (requestType === 3) head.append(el("th", { scope: "col" }, "Wafer size"), el("th", { scope: "col" }, "Units"));
+    head.append(el("th", { scope: "col" }, "Processing time"), el("th", { scope: "col" }, "Report by"));
+    columns.forEach((id) => {
+      const th = el("th", { scope: "col", class: "analysis-col" });
+      const count = samples.filter((s) => s.analyses.has(id)).length;
+      const box = el("input", { type: "checkbox", "data-col-all": String(id),
+                                "aria-label": `${analysisName(id)} for every sample` });
+      box.checked = count === samples.length;
+      box.indeterminate = count > 0 && count < samples.length;
+      const remove = el("button", { type: "button", class: "col-remove", "data-col-remove": String(id),
+                                    "aria-label": `Remove ${analysisName(id)}` }, "✕");
+      const name = el("span", { class: "col-name" }, analysisName(id));
+      th.append(name, el("br"), box, remove);
+      head.append(th);
+    });
+    if (!columns.length) head.append(el("th", { scope: "col", class: "muted" }, "Analyses"));
+    head.append(el("th", { scope: "col" }, "Extra elements"), el("th", { scope: "col" }, "Notes"),
+                el("th", { scope: "col" }, ""));
+  }
+
   function render() {
     const info = typeInfo();
+    renderHead();
     tbody.replaceChildren();
     samples.forEach((s, i) => {
       const tr = el("tr", { "data-key": String(s.key) });
+      if (selected.has(s.key)) tr.classList.add("is-selected");
+      const pick = el("input", { type: "checkbox", "data-select": String(s.key), "aria-label": `Select sample ${i + 1}` });
+      pick.checked = selected.has(s.key);
+      const tdPick = el("td"); tdPick.append(pick); tr.append(tdPick);
       tr.append(el("td", { class: "row-no" }, String(i + 1)));
       tr.append(cell(s, "sample_name", el("input", { maxlength: "100", placeholder: "Sample ID" })));
       if (requestType === 1) {
@@ -112,14 +160,13 @@
       const tdTime = cell(s, "requested_time", time);
       time.disabled = !timeLimited(s);
       tr.append(tdTime);
-      // Clicking a row's analyses edits that sample alone.
-      const summary = el("td", { "data-f": "analysis_ids", class: "analysis-summary" });
-      const edit = el("button", { type: "button", class: "analysis-chip", "data-edit": String(s.key),
-                                  title: "Choose this sample's analyses" },
-                      `✎ ${[...s.analyses].map(analysisName).join(", ") || "Choose analyses"}`);
-      summary.append(edit);
-      tr.append(summary);
-      if (analysisMode === "one" && s.key === currentKey) tr.classList.add("is-selected");
+      columns.forEach((id) => {
+        const box = el("input", { type: "checkbox", "data-analysis": String(id), "data-key": String(s.key),
+                                  "aria-label": `${analysisName(id)} for sample ${i + 1}` });
+        box.checked = s.analyses.has(id);
+        const td = el("td", { class: "analysis-cell", "data-f": "analysis_ids" }); td.append(box); tr.append(td);
+      });
+      if (!columns.length) tr.append(el("td", { class: "muted analysis-cell", "data-f": "analysis_ids" }, "—"));
       tr.append(cell(s, "additional_element_ids", el("input", { placeholder: "e.g. Fe, Li", size: "8" })));
       tr.append(cell(s, "additional_notes", el("input", { maxlength: "2000", placeholder: "optional" })));
       const remove = el("button", { type: "button", class: "btn btn--secondary btn--small", "data-remove": String(s.key),
@@ -128,49 +175,28 @@
       const tdRemove = el("td"); tdRemove.append(remove); tr.append(tdRemove);
       tbody.append(tr);
     });
-    document.querySelectorAll("#sample-table [data-only]").forEach((th) => {
-      th.classList.toggle("hidden", Number(th.dataset.only) !== requestType);
-    });
-    renderAnalysisPanel();
+    renderSelectionBar();
+    syncBrowser();
   }
 
-  function renderAnalysisPanel() {
-    if (analysisMode === "one" && !samples.some((s) => s.key === currentKey)) currentKey = samples[0].key;
-    const chosen = editedSamples();
-    $("sample-stepper").hidden = analysisMode !== "one";
-    if (analysisMode === "one") {
-      const index = samples.findIndex((s) => s.key === currentKey);
-      fillSelect($("current-sample"), samples.map((s, i) =>
-        [s.key, `Sample ${i + 1} of ${samples.length}${s.sample_name ? ` · ${s.sample_name}` : ""}`]));
-      $("current-sample").value = String(currentKey);
-      $("prev-sample").disabled = index === 0;
-      $("next-sample").disabled = index === samples.length - 1;
-    }
-    const differ = analysisMode === "all" && samples.some((s) =>
-      s.analyses.size !== samples[0].analyses.size || [...s.analyses].some((id) => !samples[0].analyses.has(id)));
-    $("analysis-note").textContent = differ
-      ? "Your samples have different analyses (shown as partly ticked). Ticking here changes every sample."
-      : "";
-    document.querySelectorAll("#analysis-groups input").forEach((box) => {
-      const id = Number(box.value);
-      const count = chosen.filter((s) => s.analyses.has(id)).length;
-      box.checked = chosen.length > 0 && count === chosen.length;
-      box.indeterminate = count > 0 && count < chosen.length;
-    });
+  function renderSelectionBar() {
+    const n = selected.size;
+    $("selection-bar").hidden = n === 0;
+    $("selection-count").textContent = `${n} sample${n === 1 ? "" : "s"} selected`;
+    $("bulk-chemical-wrap").hidden = requestType !== 1;
+    $("adder-target").textContent = n
+      ? `Adds to the ${n} selected sample${n === 1 ? "" : "s"}`
+      : "Adds to every sample";
   }
 
-  function setAnalysisMode(mode, key) {
-    analysisMode = mode;
-    document.querySelector(`input[name="analysis_mode"][value="${mode}"]`).checked = true;
-    if (mode === "one") currentKey = key ?? currentKey ?? samples[0].key;
-    render();
-  }
-
-  function buildAnalysisPanel() {
+  function buildAnalysisChoices() {
+    const info = typeInfo();
+    const list = $("analysis-options");
+    list.replaceChildren(...info.analyses.map((a) => el("option", { value: a.name }, a.group)));
     const groups = $("analysis-groups");
     groups.replaceChildren();
     const byGroup = new Map();
-    typeInfo().analyses.forEach((a) => {
+    info.analyses.forEach((a) => {
       if (!byGroup.has(a.group)) byGroup.set(a.group, []);
       byGroup.get(a.group).push(a);
     });
@@ -178,7 +204,7 @@
       const box = el("div", { class: "analysis-group" });
       box.append(el("h4", {}, group || "Other"));
       items.forEach((a) => {
-        const id = `analysis-${a.id}`;
+        const id = `browse-${a.id}`;
         const input = el("input", { type: "checkbox", id, value: String(a.id) });
         const lab = el("label", { for: id, class: "check" });
         if (a.description && a.description !== a.name) lab.title = a.description;
@@ -189,12 +215,46 @@
     });
   }
 
+  function syncBrowser() {
+    // In "Browse all", a tick means "this analysis is a column".
+    document.querySelectorAll("#analysis-groups input").forEach((box) => {
+      box.checked = columns.includes(Number(box.value));
+    });
+  }
+
+  // ------------------------------------------------------------ events
+
+  $("analysis-search").addEventListener("change", (event) => {
+    const name = event.target.value.trim().toLowerCase();
+    const match = typeInfo().analyses.find((a) => a.name.toLowerCase() === name);
+    if (match) { addColumn(match.id); event.target.value = ""; }
+  });
+  $("analysis-search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); event.target.dispatchEvent(new Event("change")); }
+  });
+  $("browse-analyses").addEventListener("click", (event) => {
+    const browser = $("analysis-browser");
+    browser.hidden = !browser.hidden;
+    event.target.setAttribute("aria-expanded", String(!browser.hidden));
+    event.target.textContent = browser.hidden ? "Browse all" : "Hide list";
+  });
   $("analysis-groups").addEventListener("change", (event) => {
     const id = Number(event.target.value);
-    editedSamples().forEach((s) => {
-      if (event.target.checked) s.analyses.add(id); else s.analyses.delete(id);
-    });
-    render();
+    if (event.target.checked) addColumn(id); else removeColumn(id);
+  });
+
+  $("sample-head").addEventListener("change", (event) => {
+    if (event.target.id === "select-all") {
+      samples.forEach((s) => (event.target.checked ? selected.add(s.key) : selected.delete(s.key)));
+      render();
+    } else if (event.target.dataset.colAll) {
+      const id = Number(event.target.dataset.colAll);
+      samples.forEach((s) => (event.target.checked ? s.analyses.add(id) : s.analyses.delete(id)));
+      render();
+    }
+  });
+  $("sample-head").addEventListener("click", (event) => {
+    if (event.target.dataset.colRemove) removeColumn(Number(event.target.dataset.colRemove));
   });
 
   tbody.addEventListener("input", (event) => {
@@ -209,16 +269,24 @@
       time.value = sample.requested_time;
     }
   });
-  tbody.addEventListener("click", (event) => {
-    const editKey = event.target.closest("[data-edit]")?.dataset.edit;
-    if (editKey) {
-      setAnalysisMode("one", Number(editKey));
-      $("analysis-panel").scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
+  tbody.addEventListener("change", (event) => {
+    const t = event.target;
+    if (t.dataset.select) {
+      const key = Number(t.dataset.select);
+      if (t.checked) selected.add(key); else selected.delete(key);
+      render();
+    } else if (t.dataset.analysis) {
+      const sample = samples.find((s) => String(s.key) === t.dataset.key);
+      const id = Number(t.dataset.analysis);
+      if (t.checked) sample.analyses.add(id); else sample.analyses.delete(id);
+      renderHead();
     }
+  });
+  tbody.addEventListener("click", (event) => {
     const key = event.target.dataset.remove;
     if (!key || samples.length === 1) return;
     samples = samples.filter((s) => String(s.key) !== key);
+    selected.delete(Number(key));
     render();
   });
   // Paste a column of IDs into a Sample ID cell: one row per line, starting at that row.
@@ -237,32 +305,63 @@
   // Ctrl+D (Cmd+D on a Mac): copy this cell's value from the row above, like Excel's fill down.
   tbody.addEventListener("keydown", (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "d") return;
-    const { f, key } = event.target.dataset;
-    if (!f) return;
+    const { f, key, analysis } = event.target.dataset;
+    if (!f && !analysis) return;
     event.preventDefault();
     const index = samples.findIndex((s) => String(s.key) === key);
     if (index < 1) return;
-    samples[index][f] = samples[index - 1][f];
-    if (f === "processing_time" && !timeLimited(samples[index])) samples[index].requested_time = "";
+    const [above, here] = [samples[index - 1], samples[index]];
+    if (analysis) {
+      const id = Number(analysis);
+      if (above.analyses.has(id)) here.analyses.add(id); else here.analyses.delete(id);
+    } else {
+      here[f] = above[f];
+      if (f === "processing_time" && !timeLimited(here)) here.requested_time = "";
+    }
     render();
-    const again = tbody.querySelector(`[data-key="${key}"][data-f="${f}"]`);
+    const again = tbody.querySelector(analysis ? `[data-key="${key}"][data-analysis="${analysis}"]`
+                                               : `[data-key="${key}"][data-f="${f}"]`);
     if (again) again.focus();
   });
 
-  document.querySelectorAll('input[name="analysis_mode"]').forEach((radio) => {
-    radio.addEventListener("change", () => setAnalysisMode(radio.value));
+  // selection bar
+  $("bulk-processing-time").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    samples.filter((s) => selected.has(s.key)).forEach((s) => {
+      s.processing_time = event.target.value;
+      if (!timeLimited(s)) s.requested_time = "";
+    });
+    event.target.value = "";
+    render();
   });
-  $("current-sample").addEventListener("change", (event) => setAnalysisMode("one", Number(event.target.value)));
-  const step = (delta) => {
-    const index = samples.findIndex((s) => s.key === currentKey) + delta;
-    if (index >= 0 && index < samples.length) setAnalysisMode("one", samples[index].key);
-  };
-  $("prev-sample").addEventListener("click", () => step(-1));
-  $("next-sample").addEventListener("click", () => step(1));
+  $("bulk-chemical").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    samples.filter((s) => selected.has(s.key)).forEach((s) => { s.chemical_id = event.target.value; });
+    event.target.value = "";
+    render();
+  });
+  $("bulk-duplicate").addEventListener("click", () => {
+    const copies = samples.filter((s) => selected.has(s.key)).map((s) => ({
+      ...s, key: nextKey++, sample_name: s.sample_name ? `${s.sample_name} (copy)` : "", analyses: new Set(s.analyses),
+    }));
+    samples.push(...copies);
+    selected.clear();
+    copies.forEach((c) => selected.add(c.key));
+    render();
+  });
+  $("bulk-remove").addEventListener("click", () => {
+    const remaining = samples.filter((s) => !selected.has(s.key));
+    if (!remaining.length) { showErrors([{ text: "A request needs at least one sample." }]); return; }
+    samples = remaining;
+    selected.clear();
+    render();
+  });
+  $("bulk-clear").addEventListener("click", () => { selected.clear(); render(); });
+
   $("add-sample").addEventListener("click", () => {
     newSample();
     render();
-    tbody.lastElementChild.querySelector('[data-f="sample_name"]').focus();
+    tbody.lastElementChild.querySelector('[data-f="sample_name"] input, input[data-f="sample_name"]').focus();
   });
   $("add-pasted").addEventListener("click", () => {
     const names = splitLines($("paste-ids").value);
@@ -276,15 +375,19 @@
     requestType = value;
     $("samples-section").hidden = false;
     $("submit-button").disabled = false;
-    const allowedTimes = new Set(typeInfo().processing_times.map((p) => String(p.value)));
-    const allowedAnalyses = new Set(typeInfo().analyses.map((a) => a.id));
+    const info = typeInfo();
+    const allowedTimes = new Set(info.processing_times.map((p) => String(p.value)));
+    const allowedAnalyses = new Set(info.analyses.map((a) => a.id));
+    columns = columns.filter((id) => allowedAnalyses.has(id));
     samples.forEach((s) => {   // keep what still applies to the new type
       if (!allowedTimes.has(String(s.processing_time))) s.processing_time = "";
       s.analyses = new Set([...s.analyses].filter((id) => allowedAnalyses.has(id)));
       if (changed) { s.chemical_id = ""; s.wafer_size = ""; s.reporting_unit = ""; }
     });
     if (!samples.length) newSample();
-    buildAnalysisPanel();
+    fillSelect($("bulk-processing-time"), info.processing_times.map((p) => [p.value, p.label]), "Set…");
+    fillSelect($("bulk-chemical"), ref.chemicals.map((c) => [c.id, c.name]), "Set…");
+    buildAnalysisChoices();
     render();
   }
 

@@ -50,26 +50,33 @@
 
     <section class="form-section" id="samples-section" hidden>
       <h2>Samples</h2>
-      <p class="hint">Works like a spreadsheet: paste a column of sample IDs from Excel to add one row per ID,
-        and press <kbd>Ctrl</kbd>+<kbd>D</kbd> in a cell to copy the value from the row above. New rows copy the
-        row above, so set up the first sample, then paste the rest of the IDs.</p>
+      <p class="hint">Paste a column of sample IDs from Excel to add one row per ID; new rows copy the row above.
+        <kbd>Ctrl</kbd>+<kbd>D</kbd> copies a cell from the row above. Tick rows to change several samples at once.</p>
+
+      <div class="analysis-adder">
+        <label for="analysis-search">Add an analysis</label>
+        <input id="analysis-search" list="analysis-options" placeholder="Type to search, e.g. 36 Elements" autocomplete="off">
+        <datalist id="analysis-options"></datalist>
+        <button type="button" class="btn btn--secondary btn--small" id="browse-analyses" aria-expanded="false"
+                aria-controls="analysis-browser">Browse all</button>
+        <span class="hint" id="adder-target"></span>
+      </div>
+      <div id="analysis-browser" class="analysis-browser" hidden>
+        <div class="analysis-groups" id="analysis-groups"></div>
+      </div>
+
+      <div class="selection-bar" id="selection-bar" hidden role="region" aria-label="Selected samples">
+        <strong id="selection-count"></strong>
+        <label>Processing time <select id="bulk-processing-time"></select></label>
+        <label id="bulk-chemical-wrap">Chemical <select id="bulk-chemical"></select></label>
+        <button type="button" class="btn btn--secondary btn--small" id="bulk-duplicate">Duplicate</button>
+        <button type="button" class="btn btn--secondary btn--small" id="bulk-remove">Remove</button>
+        <button type="button" class="link-button" id="bulk-clear">Clear selection</button>
+      </div>
+
       <div class="table-wrap">
         <table class="sample-table" id="sample-table">
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Sample ID</th>
-              <th scope="col" data-only="1">Chemical</th>
-              <th scope="col" data-only="3">Wafer size</th>
-              <th scope="col" data-only="3">Units</th>
-              <th scope="col">Processing time</th>
-              <th scope="col">Report by</th>
-              <th scope="col">Analyses</th>
-              <th scope="col">Extra elements</th>
-              <th scope="col">Notes</th>
-              <th scope="col"><span class="visually-hidden">Remove</span></th>
-            </tr>
-          </thead>
+          <thead><tr id="sample-head"></tr></thead>
           <tbody id="samples"></tbody>
         </table>
       </div>
@@ -79,23 +86,7 @@
           <textarea id="paste-ids" rows="1" placeholder="One ID per line"></textarea></label>
         <button type="button" class="btn btn--secondary btn--small" id="add-pasted">Add these</button>
       </div>
-
-      <fieldset class="analyses" id="analysis-panel" data-path="analysis_ids">
-        <legend>Analyses</legend>
-        <div class="mode-switch" role="radiogroup" aria-label="How analyses are chosen">
-          <label class="mode-option"><input type="radio" name="analysis_mode" value="all" checked>
-            <span><strong>Same for every sample</strong><br><span class="muted">Tick once, applies to all rows</span></span></label>
-          <label class="mode-option"><input type="radio" name="analysis_mode" value="one">
-            <span><strong>Different for each sample</strong><br><span class="muted">Step through the samples one by one</span></span></label>
-        </div>
-        <div class="sample-stepper" id="sample-stepper" hidden>
-          <button type="button" class="btn btn--secondary btn--small" id="prev-sample" aria-label="Previous sample">◀</button>
-          <label>Editing <select id="current-sample"></select></label>
-          <button type="button" class="btn btn--secondary btn--small" id="next-sample" aria-label="Next sample">▶</button>
-        </div>
-        <p class="hint" id="analysis-note"></p>
-        <div class="analysis-groups" id="analysis-groups"></div>
-      </fieldset>
+      <div data-path="analysis_ids"></div>
     </section>
 
     <button type="submit" class="btn btn--primary" id="submit-button" disabled>Submit request</button>
