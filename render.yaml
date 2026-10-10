@@ -1,3 +1,7 @@
+# OSS ONLY: Render's database host is not on the guard's default allow-list -- add it to
+# PORTAL_ALLOWED_DB_HOSTS (it must be a demo database; see slim_lab_portal/oss_guard.py).
+# Kept for the existing Render deployment. Resource names are unchanged on purpose:
+# renaming the database here would make Render create a new, empty one.
 databases:
   - name: labportal-db
     plan: free
@@ -9,18 +13,16 @@ services:
     name: labportal
     runtime: python
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn wsgi:app"
+    buildCommand: "pip install ."
+    startCommand: "alembic -c slim_lab_portal/alembic.ini upgrade head && uvicorn --factory slim_lab_portal.main:create_app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
     envVars:
-      - key: FLASK_SECRET_KEY
-        generateValue: true
-      - key: FLASK_ENV
+      - key: PYTHON_VERSION
+        value: "3.11.15"
+      - key: APP_ENV
         value: production
+      - key: SECRET_KEY
+        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
           name: labportal-db
           property: connectionString
-      - key: ADMIN_EMAIL
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false

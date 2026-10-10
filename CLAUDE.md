@@ -1,174 +1,171 @@
-# YourLab Testing Request Portal — Claude Context
+# slim-lab-portal — Claude Context
+
+> ## ⚠️ OSS ONLY — read first
+> This portal is a **portfolio demo** that attaches to the **open-source** SLIM repos only:
+> `slim-domain-oss`, `slim-report-engine-oss`, `slim-lims-oss` and their fictional demo data.
+> **Never connect it to PreciLab (or any real lab) production databases, shares or services.**
+> Enforced in code: `slim_lab_portal/oss_guard.py` refuses any database URL containing
+> "precilab" (no override) and any host other than localhost / 127.0.0.1 / `db` / `postgres`
+> unless listed in `PORTAL_ALLOWED_DB_HOSTS`. Every connection goes through `db.make_engine`;
+> `tests/test_oss_guard.py` fails if anything calls `create_engine` elsewhere. `.env` is read
+> from the current directory only. Do not weaken any of this.
+>
+> **Scope:** modular but narrow. Don't modify slim-domain / slim-report-engine / slim-lims yet —
+> the portal must fit them, not the other way round. Ideas worth having later go in the spec's
+> "Parked ideas" list (docs/SLIM_DOMAIN_V2.md §11) and get raised with the user, not built.
 
 ## What This Is
 
-A Flask web app for an ISO 17025 accredited analytical chemistry lab. Authenticated customers fill out a multi-section testing request form (company info, payment, email distribution lists, sample details); lab staff (admins) review submissions and update their status from a dashboard.
+The sample submission portal for the SLIM LIMS ecosystem (slim-domain, slim-report-engine,
+slim-lims), built for an ISO 17025 accredited analytical chemistry lab. Customers log in and
+submit Testing Requests (TRs); lab staff receive samples and move TRs through their statuses.
+The portal replaces the Excel Testing Request form as the primary intake path; emailed `.xlsx`
+forms stay supported by slim-domain's parsers for back-compatibility. The portal never produces
+Excel — it produces TR domain objects.
+
+**The domain spec is `docs/SLIM_DOMAIN_V2.md`. Read it before changing anything under
+`slim_lab_portal/domain/`, the TR tables, enums or statuses.**
+
+## Rebuild status (branch `claude/slim-lab-portal-rebuild`)
+
+The repo was a Flask app ("LabPortal"); it is being rebuilt on FastAPI. Old code is in git
+history (`main` before the rebuild) — e.g. `git show main:app/templates/form.html`.
+
+1. ✅ Spec: `docs/SLIM_DOMAIN_V2.md`
+2. ✅ FastAPI skeleton: config, SQLAlchemy 2, Alembic, session auth, CSRF, security headers, pytest
+3. ✅ Domain objects (pydantic, per spec §3–4), input models, repository, TR number counter, JSON API
+4. ✅ Reference-data cache over SLIM tables, analysis catalog, `scripts/seed_demo.py` (OSS demo data)
+5. ✅ (A) Bridge: portal-side adapter TRSubmission v2 -> slim-domain-oss v1 TRSubmission, plus a
+   test feeding it to slim-report-engine-oss's report builder on OSS demo data. Portal only.
+   `slim_lab_portal/bridge.py` (`to_slim_v1`, received TRs only); `tests/test_bridge.py` renders
+   Chemical/Water/Wafer reports with the engine's own writer (skipped without the OSS packages).
+6. ✅ (B) Screens, reviewed with the user: customer form (per-request-type fields, choices from
+   /api/reference), request list/detail, staff receive + status changes + chemical matching, users,
+   JSON view. routes.py pages, templates/requests/*, admin/home + users, static/js/request_form.js
+   (vanilla JS), static/css/portal.css, e2e/request_flow.js. Not done (parked): customer profiles
+   (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request.
+7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
+   slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
+   repos — **needs the user's explicit go-ahead.** Includes: the report engine should print actual
+   results from the DB instead of a blank report, generated once results exist ("data is in") —
+   to be designed in a separate conversation.
+8. ⏸ (C) Ecosystem docker-compose (portal + slim-lims + Postgres + Caddy) for the portfolio VPS.
+   **DEFERRED — do not start.** Waits until the other modules are ready to bolt in, so the demo
+   launches with several modules and can take one submission end to end: submission → receipt →
+   analysis/report → delivery → invoice.
+
+Agreed order: A and B done; this stage is wrapped up (merge the branch to main via PR). Next D
+when approved; C last. The user is token-constrained: small, focused steps,
+short replies.
 
 ## How to Run
 
 ```bash
-cp .env.example .env   # set FLASK_SECRET_KEY, DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
-pip install -r requirements.txt
-python seed.py          # creates tables + demo admin/customer/submission data
-python wsgi.py          # http://127.0.0.1:5000
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env                     # DATABASE_URL defaults to sqlite:///slim_lab_portal.db
+pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss   # OSS repos, for the demo seed
+python scripts/seed_demo.py              # migrations + OSS demo SLIM data + analysis_catalog
+PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM
+uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:8000, API docs at /api/docs
+pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
 ```
 
-Or via Docker Compose: `docker compose up --build`.
+Or `docker compose up --build` (portal + Postgres 16 on :8000).
 
 ## File Map
 
 ```
-wsgi.py                       # WSGI entry point — `app = create_app()`
-seed.py                        # Creates tables + demo data (admin, 3 customers, 5 submissions)
-app/
-├── __init__.py                # create_app() application factory, blueprint registration, security headers
-├── extensions.py              # db (SQLAlchemy), bcrypt, login_manager — shared singletons
-├── domain.py                  # Pure dataclasses: Sample, TestingRequest (no Flask/SQLAlchemy imports)
-├── models.py                  # SQLAlchemy models: User, Submission, Sample, AuditLog
-├── schemas.py                 # marshmallow schemas: SampleSchema, SubmissionSchema; parse_tagify()
-├── repositories.py            # SubmissionRepository — translates domain objects <-> ORM models
-├── auth/                       # Blueprint: /login, /logout
-│   ├── decorators.py           # login_required (re-export), admin_required
-│   └── routes.py
-├── main/                        # Blueprint: / (customer form), /new-submission (admin form), /submit
-│   └── routes.py
-├── admin/                        # Blueprint: /admin/* (dashboard, submissions, users)
-│   └── routes.py
-└── templates/
-    ├── base.html                  # Shared layout (header/nav/footer blocks)
-    ├── login.html
-    ├── form.html                   # Full multi-section form UI (moved here, minimal nav changes)
-    └── admin/
-        ├── submissions.html        # Paginated submission list + inline status update
-        ├── submission_detail.html  # Full submission detail incl. samples/analyses
-        └── users.html               # User list + create-customer form
-static/
-├── css/style.css               # Corporate light theme (unchanged)
-├── css/admin.css                # Dark theme overrides for admin pages (.admin-theme)
-├── js/script.js                # Client-side form logic — tagifyMap, populateFromProfile(), Select2, Tagify, modal
-└── data/analyses.json          # Catalog of ~43 analyses in 7 groups — unchanged
+slim_lab_portal/
+├── main.py          # create_app(settings, engine): middleware, routers, exception handlers, /health
+├── config.py        # Settings from env (APP_ENV, SECRET_KEY, DATABASE_URL, ...)
+├── db.py            # Base (portal-owned tables only), make_engine (the only way to connect), get_db
+├── oss_guard.py     # OSS-ONLY guard: refuses "precilab" URLs and non-demo hosts (called by make_engine)
+├── domain/          # Spec §3–4: enums.py, tr.py (TRSubmission, TRSample, ...), workflow.py (transitions)
+├── models.py        # SQLAlchemy models: User + TR tables (tr_submissions, tr_samples, ...)
+├── repositories.py  # TRSubmissionRepository: domain <-> rows, gapless TR numbers, stale-update check
+├── schemas.py       # Input models (SubmissionIn, SampleIn, StatusChangeIn) — shape/type validation only
+├── services.py      # SubmissionService: reference-data rules, access rules, submit/list/get/change_status
+├── reference.py     # ReferenceData protocol, StaticReferenceData (snapshot + form choices)
+├── reference_cache.py  # ReferenceCache: loads SLIM tables + analysis_catalog, TTL refresh, keeps last good copy
+├── slim_tables.py   # Read-only Core defs of SLIM's customers/chemicals/elements/analyses (own MetaData)
+├── catalog.py       # sync_analysis_catalog: data/analysis_catalog.csv -> analysis_catalog, matched by SLIM name
+├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
+├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
+├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
+├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
+├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
+├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
+├── web.py           # Jinja2 templates, render(), flash()
+├── cli.py           # create-staff, create-customer-user, sync-analysis-catalog
+├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
+├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
+└── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js
+scripts/seed_demo.py # Demo DB only: runs slim-report-engine-oss demo seed() if SLIM tables are empty, syncs catalog
+tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
+docs/SLIM_DOMAIN_V2.md
 ```
 
-## Current Architecture
+## Architecture Rules
 
-- **Backend:** Flask application factory + Blueprints (`auth`, `main`, `admin`)
-- **Database:** PostgreSQL via Flask-SQLAlchemy. Tables: `users`, `submissions`, `samples`, `audit_log` (audit_log table now written on admin submissions; no UI yet)
-- **Three-layer separation, strictly enforced:**
-  - `domain.py` — pure dataclasses (`Sample`, `TestingRequest`), zero framework imports
-  - `schemas.py` — marshmallow boundary: validates/deserializes incoming JSON into domain objects, rejects bad input with 400 + descriptive JSON errors (never 500)
-  - `repositories.py` — `SubmissionRepository` is the only place that converts domain objects <-> ORM models; route handlers never touch `db.session` for submissions/samples directly
-- **Auth:** Flask-Login + Flask-Bcrypt. Single `users` table with `role` column (`customer` | `admin`). No self-registration — admins create customer accounts via `/admin/users/create`
-- **Frontend:** Vanilla JS + jQuery 3.7.1 + Select2 4.0.13 + Tagify 4.31.3 (all CDN, pinned) — unchanged from prior phase
-- **Security headers** set via `@app.after_request` in `app/__init__.py`: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
-- **1 MB request cap** via `MAX_CONTENT_LENGTH`
+- **Layers:** `domain/` (pure pydantic + stdlib, liftable into slim-domain unchanged) ← input
+  models validate HTTP input ← repositories are the only code that touches the DB for TRs.
+- **Data ownership:** one Postgres shared with SLIM. The portal only READS SLIM reference tables
+  (customers, chemicals, elements, analyses) and never declares them on `db.Base`; Alembic must
+  never create/alter them. No FKs from portal tables into SLIM tables.
+- **Portable schema:** must run on SQLite and Postgres (as slim-domain does) — no ARRAY columns,
+  enums stored as ints. Portal-owned TR tables use integer keys; `users` uses UUIDs.
+- **Auth:** Starlette signed-cookie sessions (`SameSite=Lax`, `Secure` in production), bcrypt.
+  Roles: `customer` (must have `customer_id`, a SLIM customer ID) and `staff` (must have
+  `initials`). No self-registration; staff create users. Customers must already exist in SLIM.
+- **CSRF:** every router is created with `dependencies=[Depends(csrf_protect)]`. Forms send
+  `csrf_token`; fetch/JSON sends the `X-CSRF-Token` header (token in `<meta name="csrf-token">`).
+  `tests/test_app.py` fails if any state-changing route accepts a request without a token.
+- **CSP:** no `'unsafe-inline'` — never add inline `<script>`; pass server data via `data-*`
+  attributes. Allowed script hosts: code.jquery.com, cdn.jsdelivr.net.
+- **Errors:** invalid input → 422 with per-field detail (FastAPI default). HTML routes render
+  `error.html`; `/api/*` and `Accept: application/json` get JSON. Unauthenticated: HTML → 303 to
+  `/login?next=...`, API → 401. Non-staff on staff routes → 403.
+- **API:** `POST /api/submissions` (201), `GET /api/submissions[?status&request_type&page]`,
+  `GET /api/submissions/{tr_number}`, `POST /api/submissions/{tr_number}/status`,
+  `POST /api/submissions/{tr_number}/samples/{position}/chemical` (staff: match to SLIM). Responses are
+  `TRSubmission.model_dump(mode="json")` — enums as ints. Customers only see their own customer's
+  TRs (others → 404). Business-rule failures → 422 with `loc` pointing at the field; disallowed or
+  concurrent status changes → 409.
+- **Reference data:** `app.state.reference` is a `ReferenceCache` (TTL `REFERENCE_CACHE_TTL_SECONDS`,
+  default 300 s; staff can force a reload on /admin). A failed refresh keeps the previous snapshot.
+  SLIM analyses with no `analysis_catalog` row are never offered. `GET /api/reference` gives the
+  form its choices (customers only for staff).
+- **OSS only:** see the banner at the top. `PORTAL_ALLOWED_DB_HOSTS` is for other *demo* hosts.
+- **Dates:** "today" means the lab's local date (`LAB_TIMEZONE`, default America/Chicago). Expected
+  arrival (optional, customer) can't be in the past; `date_received` (staff) can't be in the future.
+- **Demo data only:** dev, tests and the portfolio use the OSS repos' fictional data
+  (`slim-report-engine-oss/demo/demo.py`). `scripts/seed_demo.py` never writes into SLIM tables
+  that already hold data. Never point the portal at the lab's production database from here.
+- **Routes are plain `def`** (sync SQLAlchemy), not `async def`.
+- 1 MB request cap (`MAX_BODY_BYTES`), enforced with or without Content-Length.
 
-## Key Backend Facts
+## Key Decisions (see the spec for detail)
 
-- `parse_tagify()` and `EMAIL_RE` live in `app/schemas.py`; Tagify email fields arrive as raw JSON strings (`'[{"value":"a@b.com"}]'`) and are parsed/validated by the custom `TagifyEmailList` marshmallow field
-- `SubmissionSchema.load()` returns a `TestingRequest` domain object (via `@post_load`), not a dict; `SampleSchema` likewise returns `Sample`
-- `SubmissionSchema` has `class Meta: unknown = EXCLUDE` — extra keys in the POST body (e.g. `behalf_customer_id`) are silently dropped by the schema so the route can read them from the raw `data` dict after validation without triggering a 400
-- `GET /` redirects unauthenticated users to login; redirects admins to `/admin/submissions`; renders the form for customers
-- `GET /new-submission` (`@admin_required`) renders `form.html` with the full `customers` list (all `role="customer"` users ordered by `company_name`); form fields start blank
-- `GET /admin/api/customer/<id>/profile` (`@admin_required`) returns a customer's saved profile fields as JSON for JS pre-fill
-- `POST /submit` is `@login_required`; for customers, stamps `current_user.id` as `user_id`; for admins, reads `behalf_customer_id` from JSON body, validates it is a real customer UUID, attributes the submission to that customer, and writes an `AuditLog` entry (`field_name="submitted_by_admin"`, `changed_by=<admin_id>`, `new_value=<customer_id>`). Returns 201 `{"message": "Submission received", "submission_id": "<uuid>"}` on success; 400 on validation error.
-- `VALID_SAMPLE_TYPES` (schemas.py): `chemical`, `water`, `wafer`
-- `VALID_PROCESSING_TIMES` (schemas.py): `Standard`, `Next Day`, `Rush`
-- `VALID_ROLES` (models.py): `customer`, `admin`
-- `VALID_STATUSES` (models.py): `received`, `in_progress`, `complete`
-- All primary keys are UUIDs (`UUID(as_uuid=True), default=uuid.uuid4`)
-- `@admin_required` (app/auth/decorators.py) wraps `@login_required` and aborts 403 for non-admins
+- One request type (Chemical / Water / Wafer) per submission; per-type sample fields.
+- Chemical / matrix is free text from the customer; linked to a SLIM chemical only on an exact name
+  match, otherwise matched (or created in SLIM) by the lab later. The bridge refuses unmatched TRs.
+- Form UX (user-approved): samples table + one grouped analysis panel that applies to the ticked
+  rows (or all rows when none are ticked); Gmail-style selection bar. The analysis-matrix layout
+  was tried and rejected — too many analysis combinations for per-analysis columns.
+- TR numbers `TR00001`… from a gapless counter row locked in the submit transaction.
+- **Check-in** (staff, `/requests/{tr}/check-in`, `POST /api/submissions/{tr}/check-in`) is the only
+  way to RECEIVED: receipt (date, initials, note) + every chemical matched to SLIM, one step —
+  the portal's equivalent of the VBA/manual log-in. "Reject" = cancel with a reason.
+- Statuses: submitted → received → in progress → partial report (repeatable) → complete report
+  → invoiced (terminal, staff only); cancelled (customer may cancel only while submitted).
+- Payment: purchase order (PO number, also used for billing codes) or credit card (lab calls;
+  no card data stored).
+- Call-in RUSH = outside business hours. Wafer sizes 200 / 300 mm; units atoms/cm² or
+  10¹⁰ atoms/cm². Water packages exist in the shape but are not offered yet.
+- Hosting target: portfolio VPS running the whole ecosystem via Docker Compose. `render.yaml`
+  keeps the old Render resource names so Render doesn't create a new empty database.
 
-## Key Frontend Facts
+## Backlog
 
-- `sampleCounter` is a module-level monotonic int used to namespace `analysis[N][]` select names — never reset, never based on DOM children count
-- `showFormError(message)` writes to `#form-error` (role="alert") instead of alert()
-- Confirmation modal has `role="dialog"`, `aria-modal`, `aria-labelledby`; ESC key and backdrop click close it
-- `createAnalysisDropdown()` returns a disabled placeholder `<select>` on fetch failure (never returns undefined)
-- Processing time is a `<select>` restricted to Standard / Next Day / Rush
-- All 11 customer-info inputs have matching `id` and `for` attributes for label linkage
-- `form.html` conditionally loads `admin.css` and applies `class="admin-theme"` to `<body>` when the viewer is an admin, giving the form the same dark theme as the rest of the admin UI
-- `tagifyMap` (module-level object in `script.js`) stores Tagify instances keyed by input element ID so they can be reset programmatically
-- `populateFromProfile(profile)` fills all plain inputs, Tagify email fields, payment-method radio, and PO number from a profile object — used both for saved-profile pre-fill on page load and for admin customer-select pre-fill via fetch
-- Customer profile data is injected server-side as a `data-profile='...'` attribute on `#sampleForm` (JSON-encoded); `script.js` reads it via `document.getElementById("sampleForm").dataset.profile` and parses with `JSON.parse()`. **Do not use an inline `<script>` tag for this** — the CSP `script-src` does not include `'unsafe-inline'`, so inline scripts are blocked by every browser and the profile would never load
-- Admin form shows a "Submit on Behalf Of" `<select>` (populated server-side) and a hidden `#behalf-customer-id` input; selecting a customer fetches `/admin/api/customer/<id>/profile` and calls `populateFromProfile()`
-
-## Submitted JSON Shape (POST /submit)
-
-```json
-{
-  "customer_name": "Acme Corp",
-  "street_address": "123 Main St",
-  "city": "Springfield",
-  "state": "IL",
-  "country": "USA",
-  "customer_contact": "Jane Doe",
-  "customer_phone": "555-1234",
-  "results_list": "[{\"value\":\"jane@acme.com\"}]",
-  "results_cc_list": "[]",
-  "invoice_list": "[{\"value\":\"ap@acme.com\"}]",
-  "invoice_cc_list": "[]",
-  "payment_method": "po",
-  "po_number": "PO-9876",
-  "cc_number": "",
-  "behalf_customer_id": "",
-  "samples": [
-    {
-      "sample_id": "S-001",
-      "chemical_matrix": "IPA",
-      "sample_type": "chemical",
-      "processing_time": "Next Day",
-      "analyses": ["36_elements_icpms", "toc"]
-    }
-  ]
-}
-```
-
-`results_list`/`results_cc_list`/`invoice_list`/`invoice_cc_list` arrive as raw Tagify JSON strings and are parsed server-side into plain email lists by `TagifyEmailList`.
-
-`behalf_customer_id`: UUID string of the selected customer when submitted by an admin; empty string for customer self-submissions (field is ignored server-side for non-admins).
-
----
-
-## Suggested Improvements
-
-### Already Done (do not re-suggest)
-
-- SQLite/PostgreSQL database via SQLAlchemy (replaced flat-file JSONL storage)
-- Admin dashboard (`/admin/submissions`, `/admin/submissions/<id>`, `/admin/users`)
-- Customer accounts with login (Flask-Login + bcrypt); admin-created, no self-registration
-- Submission status tracking (`received` / `in_progress` / `complete`), updatable from admin view
-- Flask Blueprints (`auth`, `main`, `admin`)
-- Dark admin theme (`admin.css`, `.admin-theme`) consistent with corporate palette
-- Server-side validation with descriptive error messages (marshmallow)
-- Tagify email field parsing on the backend
-- UUID primary keys throughout
-- Security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy)
-- 1 MB request size cap
-- All input `id` / `for` label linkage
-- Pinned CDN versions
-- Accessible modal (role, aria-modal, ESC, backdrop click)
-- Processing time restricted to valid enum values
-- Inline error display via `#form-error`
-- Docker Compose, Dockerfile, render.yaml, seed.py for deployment/demo data
-- Admin submit on behalf of customer — `/new-submission` route, customer selector with JS pre-fill, server-side attribution, audit log entry
-- Dark admin theme applied to `form.html` when viewed by an admin
-- `SubmissionSchema` ignores unknown fields (`Meta.unknown = EXCLUDE`) so `behalf_customer_id` in the POST body doesn't cause a 400
-- Customer profile pre-fill via `data-profile` attribute (not inline script) to comply with CSP
-
-### Explicitly Out of Scope (do not build without a new spec)
-
-- Copy sample / copy submission / edit submission UI
-- Email notifications (confirmation to customer, alert to lab staff) — `# TODO` markers exist in `app/main/routes.py`
-- Audit log UI — table exists, repository has `# TODO` markers for writes, but no routes/templates
-- "Reported" status (only `received` / `in_progress` / `complete` exist)
-
-### Lower Priority (still open)
-
-- **Delete sample button** — users currently cannot remove a sample row without refreshing the page
-- **Notes / special instructions** — free-text textarea per submission
-- **SRI hashes on CDN links** — compute at srihash.org
-- **"Copy last sample" button** — duplicate a row for high-throughput submissions
-- **Billing code / cost center field**
-- **File attachments** — COAs, SDSs, protocols
-- **Analysis descriptions in UI** — `long_description`/`short_description` exist but only as tooltips
-- **Self-host CDN dependencies**
+See "Parked ideas" in docs/SLIM_DOMAIN_V2.md §11.

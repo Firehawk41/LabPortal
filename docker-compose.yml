@@ -1,25 +1,28 @@
-version: "3.9"
-
+# Local development: the portal plus Postgres.
+# The full ecosystem compose (portal + slim-lims + Caddy) comes in a later step.
 services:
-  web:
+  portal:
     build: .
     ports:
-      - "5000:10000"
+      - "8000:8000"
     environment:
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-key-change-me}
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/labportal
-      FLASK_ENV: ${FLASK_ENV:-development}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      APP_ENV: ${APP_ENV:-development}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-me}
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/slim
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   db:
-    image: postgres:15
+    image: postgres:16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: labportal
+      POSTGRES_DB: slim
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d slim"]
+      interval: 2s
+      retries: 15
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
