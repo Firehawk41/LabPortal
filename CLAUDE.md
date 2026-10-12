@@ -53,8 +53,11 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    **DEFERRED — do not start.** Waits until the other modules are ready to bolt in, so the demo
    launches with several modules and can take one submission end to end: submission → receipt →
    analysis/report → delivery → invoice.
+9. ✅ Link-ready (portal only): shared-Postgres `docker-compose.yml` with a seed step; slim-lims bearer
+   token (`LIMS_API_TOKEN`, `auth.ServiceClient`, `ActorType.SYSTEM`, limited to list/get/status and to
+   in progress / partial / complete report); contract in spec §12 + `tests/test_lims_contract.py`.
 
-Agreed order: A and B done; this stage is wrapped up (merge the branch to main via PR). Next D
+Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
 short replies.
 
@@ -71,7 +74,9 @@ uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:
 pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
 ```
 
-Or `docker compose up --build` (portal + Postgres 16 on :8000).
+Or `docker compose up --build`: Postgres 16 shared like the ecosystem (SLIM demo tables + portal
+tables), a one-shot `seed` service (needs `../slim-domain-oss` and `../slim-report-engine-oss`), and the
+portal on :8000. Set `LIMS_API_TOKEN` to let slim-lims call the API.
 
 ## File Map
 
@@ -118,6 +123,9 @@ docs/SLIM_DOMAIN_V2.md
 - **Auth:** Starlette signed-cookie sessions (`SameSite=Lax`, `Secure` in production), bcrypt.
   Roles: `customer` (must have `customer_id`, a SLIM customer ID) and `staff` (must have
   `initials`). No self-registration; staff create users. Customers must already exist in SLIM.
+- **Machine access:** slim-lims uses `Authorization: Bearer $LIMS_API_TOKEN` (spec §12). Token
+  requests skip CSRF and never use the session; only `auth.LIMS_ROUTES` are allowed. Keep
+  `tests/test_lims_contract.py` passing — slim-lims is written against it.
 - **CSRF:** every router is created with `dependencies=[Depends(csrf_protect)]`. Forms send
   `csrf_token`; fetch/JSON sends the `X-CSRF-Token` header (token in `<meta name="csrf-token">`).
   `tests/test_app.py` fails if any state-changing route accepts a request without a token.

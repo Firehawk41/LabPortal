@@ -1,15 +1,18 @@
 """Session login: dependencies that identify the user, and the /login and /logout routes.
 
-current_user   -- the logged-in User or None; also stored on request.state.user for templates
+current_user   -- the logged-in User (or the slim-lims ServiceClient for a valid bearer token) or
+                  None; also stored on request.state.user for templates
 require_user   -- any active user; HTML requests redirect to /login, /api requests get 401
 require_staff  -- staff only; 403 otherwise
 """
 
+import hmac
 import uuid
+from dataclasses import dataclass
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,7 +33,48 @@ class StaffRequired(Exception):
     """Raised by require_staff; handled in main.py (403)."""
 
 
+# The API routes slim-lims may call with its token (spec §12); everything else is refused.
+LIMS_ROUTES = frozenset({"list_submissions", "get_submission", "change_status"})
+
+
+@dataclass(frozen=True)
+class ServiceClient:
+    """Another SLIM module calling the API with a bearer token -- not a person, no session.
+    Sees every customer's requests (like staff) but may only use LIMS_ROUTES, and the
+    workflow only lets it set the statuses in domain.workflow.SYSTEM_STATUSES."""
+
+    name: str
+    is_staff: bool = True
+    is_service: bool = True
+    is_active: bool = True
+    customer_id: None = None
+    initials: None = None
+
+    @property
+    def id(self) -> str:
+        return self.name
+
+
+def _service_client(request: Request) -> ServiceClient | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    expected = request.app.state.settings.lims_api_token
+    if scheme.lower() != "bearer" or not expected or not token.strip():
+        return None
+    if not hmac.compare_digest(token.strip().encode(), expected.encode()):
+        return None
+    route = request.scope.get("route")
+    if getattr(route, "name", None) not in LIMS_ROUTES or not getattr(route, "path", "").startswith("/api/"):
+        raise HTTPException(status_code=403, detail="slim-lims may not use this endpoint.")
+    return ServiceClient(name="slim-lims")
+
+
 def current_user(request: Request, db: Annotated[Session, Depends(get_db)]) -> User | None:
+    if "authorization" in request.headers:
+        # Token requests never fall back to the session cookie (that is what lets
+        # csrf_protect skip them). A wrong or missing token is simply "not logged in".
+        user = _service_client(request)
+        request.state.user = user
+        return user
     user = None
     raw_id = request.session.get(SESSION_USER_KEY)
     if raw_id:

@@ -63,7 +63,8 @@ Open http://127.0.0.1:8000 (API docs at `/api/docs`). Create a customer user wit
 `python -m slim_lab_portal.cli create-customer-user --email you@customer.example --customer-id 1`.
 Run the tests with `pytest`; `e2e/request_flow.js` is a Playwright run-through of the form.
 
-With Docker: `docker compose up --build`, then create a staff user with
+With Docker (Postgres shared the way the SLIM ecosystem shares it; expects the OSS repos next to
+this one): `docker compose up --build`, then create a staff user with
 `docker compose exec portal python -m slim_lab_portal.cli create-staff ...`.
 
 ## Security

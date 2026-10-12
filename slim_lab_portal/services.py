@@ -57,6 +57,8 @@ class Conflict(Exception):
 
 
 def actor_for(user: User) -> Actor:
+    if user.is_service:
+        return Actor(type=ActorType.SYSTEM, id=user.id, display=user.name)
     if user.is_staff:
         return Actor(type=ActorType.STAFF, id=str(user.id), display=user.initials)
     return Actor(type=ActorType.CUSTOMER_USER, id=str(user.id), display=user.email)

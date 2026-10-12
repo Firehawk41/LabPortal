@@ -16,6 +16,11 @@ ALLOWED_TRANSITIONS: dict[TRStatus, frozenset[TRStatus]] = {
 }
 
 
+# What the LIMS (ActorType.SYSTEM, spec §12) may set: it moves work forward and issues reports.
+# Receiving (check-in), cancelling and invoicing stay with lab staff.
+SYSTEM_STATUSES = frozenset({TRStatus.IN_PROGRESS, TRStatus.PARTIAL_REPORT, TRStatus.COMPLETE_REPORT})
+
+
 class TransitionNotAllowed(ValueError):
     pass
 
@@ -23,6 +28,8 @@ class TransitionNotAllowed(ValueError):
 def allowed_next_statuses(current: TRStatus, actor_type: ActorType) -> tuple[TRStatus, ...]:
     if actor_type is ActorType.CUSTOMER_USER:
         return (TRStatus.CANCELLED,) if current is TRStatus.SUBMITTED else ()
+    if actor_type is ActorType.SYSTEM:
+        return tuple(sorted(ALLOWED_TRANSITIONS[current] & SYSTEM_STATUSES))
     return tuple(sorted(ALLOWED_TRANSITIONS[current]))
 
 
