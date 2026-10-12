@@ -23,6 +23,8 @@ class Settings:
     reference_cache_ttl_seconds: int = 300
     # The lab's local time zone: "today" for receipt and expected-arrival dates.
     lab_timezone: str = "America/Chicago"
+    # Bearer token slim-lims uses for the API (spec §12). Unset = no machine access.
+    lims_api_token: str | None = None
 
     @property
     def is_production(self) -> bool:
@@ -53,6 +55,10 @@ def load_settings() -> Settings:
         if env == "production":
             raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
         secret_key = _DEV_SECRET
+    lims_api_token = os.environ.get("LIMS_API_TOKEN", "").strip() or None
+    if lims_api_token is not None and len(lims_api_token) < 32:
+        raise RuntimeError("LIMS_API_TOKEN must be at least 32 characters (e.g. python -c "
+                           "'import secrets; print(secrets.token_urlsafe(32))')")
     return Settings(
         env=env,
         database_url=_database_url(os.environ.get("DATABASE_URL", "sqlite:///slim_lab_portal.db")),
@@ -63,4 +69,5 @@ def load_settings() -> Settings:
         slim_database_url=_database_url(os.environ["SLIM_DATABASE_URL"]) if os.environ.get("SLIM_DATABASE_URL") else None,
         reference_cache_ttl_seconds=int(os.environ.get("REFERENCE_CACHE_TTL_SECONDS", 300)),
         lab_timezone=os.environ.get("LAB_TIMEZONE", "America/Chicago"),
+        lims_api_token=lims_api_token,
     )

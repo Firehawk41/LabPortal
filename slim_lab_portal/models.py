@@ -54,6 +54,8 @@ class User(Base):
     def is_staff(self) -> bool:
         return self.role == ROLE_STAFF
 
+    is_service = False  # see auth.ServiceClient
+
 
 # ---------------------------------------------------------------- Testing Requests
 # Spec §7. These tables move to slim-domain later: same names, same columns. Enums are stored

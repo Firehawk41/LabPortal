@@ -470,3 +470,37 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
   improvement over Excel for customers who send the same panel regularly.
 - Upload sample IDs from a CSV/XLSX column (beyond pasting).
 - Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.
+
+## 12. Integration contract: portal ↔ slim-lims
+
+What slim-lims may rely on when it is connected. `tests/test_lims_contract.py` fails if the
+portal breaks any of it; change this section, the test and slim-lims together.
+
+**Setup.** One Postgres holds SLIM's tables and the portal's (`docker-compose.yml`). slim-lims
+reads TRs through the portal's API, not the TR tables, until slim-domain owns them (§9).
+
+**Auth.** `Authorization: Bearer <LIMS_API_TOKEN>` (portal env var, ≥ 32 chars; unset = no
+machine access). No session, no CSRF token. A token request never falls back to a session
+cookie; a wrong token is 401. The token acts as `Actor(type=SYSTEM, id="slim-lims")` and sees
+every customer's TRs.
+
+**Endpoints** (anything else → 403):
+
+| Call | Use |
+|---|---|
+| `GET /api/submissions?status=2[&request_type=&page=&per_page=≤100]` | TRs checked in and ready for work |
+| `GET /api/submissions/{tr_number}` | one TR |
+| `POST /api/submissions/{tr_number}/status` `{"to_status": n, "note": "..."}` | report progress |
+
+**Payload.** `TRSubmission.model_dump(mode="json")` (§4): enums as ints, dates ISO,
+`status_history` oldest first. Every sample of a RECEIVED (or later) Chemical TR has a
+`chemical_id` (§4 rule 6). List responses are `{"items", "total", "page", "per_page"}`.
+Keys may be added; none are removed or renamed without changing this section.
+
+**Statuses slim-lims may set:** IN_PROGRESS (3), PARTIAL_REPORT (4, repeatable), COMPLETE_REPORT (5),
+following §3's transitions. Receiving (check-in), cancelling and invoicing stay with lab staff.
+A disallowed or out-of-order change is 409 — re-read the TR and carry on. Put the report
+reference in `note`.
+
+**Converting to slim-domain v1** (until §9): `slim_lab_portal/bridge.py` `to_slim_v1` shows the
+mapping; it moves to slim-domain or slim-lims when they are connected.
