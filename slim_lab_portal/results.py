@@ -12,10 +12,15 @@ People reach slim-data as an `Actor`: the user's UUID (what four-eyes compares; 
 change), initials for display, their lab role, AUTHENTICATED (a real login).
 
 slim-data flushes; the portal owns the transaction and commits (slim-data D-23).
+
+Issuing a report (D-73): until the report engine renders a file, the "file" is a canonical JSON
+form of the report view; its sha256 is what slim-data records, and `report_view(as_of=...)`
+rebuilds it exactly. The TR moves to partial or complete report in the same transaction (D-71).
 """
 
 import json
 from collections.abc import Mapping
+from hashlib import sha256
 from enum import StrEnum
 from functools import cache
 
@@ -26,14 +31,18 @@ from slim_data.adapters.slim import SlimReferenceLookup, TrSampleInfo
 from slim_data.domain.actor import Actor
 from slim_data.domain.enums import IdentitySource, Role
 from slim_data.domain.policy import DEMO_POLICY
+from slim_data.domain.results import ReportLine
 from slim_data.domain.values import AnalyteRef, SampleRef
+from slim_data.domain.workflow import WorkflowError
 from slim_data.engine.ruleset import Ruleset
 from slim_data.persistence import migrate
+from slim_data.persistence.results import issues_for_tr
 from slim_data.persistence.rulesets import publish_policy, publish_ruleset
 from slim_data.pipeline.generic_csv import GenericCsv
 from slim_data.rulesets import ruleset_text
 from slim_data.service.imports import ImportReceipt, import_run
 from slim_data.service import workflow as wf
+from slim_data.service.views import ReportView, report_view
 from slim_data.service.workflow import EvaluationReceipt, evaluate_batch
 
 from slim_lab_portal import slim_tables as t
@@ -224,3 +233,67 @@ def act_on_result(
             return wf.reject(session, sample, analyte, actor, note)
         case ResultAction.CORRECT:
             return wf.start_correction(session, sample, analyte, actor, note)
+
+
+# ---------------------------------------------------------------- report issues (D-73)
+
+class NothingToIssue(WorkflowError):
+    """No released results, or nothing changed since the last issue."""
+
+
+def report_document(view: ReportView) -> dict:
+    """What the customer is shown, in a canonical form whose sha256 stands in for the report file
+    until the report engine renders one (D-73). Internal facts (solo sign-off) stay out."""
+    return {
+        "tr_number": view.tr_number,
+        "lines": [
+            {
+                "sample": str(line.sample), "analysis_id": line.analyte.analysis_id, "analyte": line.analyte.code,
+                "version": line.version, "text": line.text,
+                "unit": line.reported.unit if line.reported else None, "qualifier": line.qualifier.name,
+                "uncertainty": None if line.uncertainty is None else str(line.uncertainty),
+                "recovery": None if line.recovery is None else str(line.recovery),
+                "notes": list(line.notes), "shown_flags": list(line.shown_flags), "amended": line.amended,
+            }
+            for line in view.lines
+        ],
+    }
+
+
+def document_sha256(document: dict) -> str:
+    return sha256(json.dumps(document, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def report_complete(view: ReportView, submission) -> bool:
+    """Every analysis ordered on every sample has results, all released (D-71). Analyses slim-data
+    never gets readings for keep a TR partial; staff close it with the status form."""
+    ordered = {(s.position, a) for s in submission.samples for a in s.analysis_ids}
+    reported = {(line.sample.position, line.analyte.analysis_id) for line in view.lines}
+    return not view.waiting and ordered <= reported
+
+
+def issue_report(session: Session, service, tr_number: str, user: User) -> dict:
+    """Records what the report shows now (every released result, latest versions) and moves the TR
+    to partial or complete report (D-71, D-73). A report carrying a corrected result amends the
+    latest issue. Raises NothingToIssue, or slim-data's WorkflowError."""
+    submission = service.get(tr_number, user)  # 404s an unknown TR
+    view = report_view(session, tr_number)
+    if not view.lines:
+        raise NothingToIssue(f"{tr_number} has no released results to report")
+    document = report_document(view)
+    digest = document_sha256(document)
+    previous = issues_for_tr(session, tr_number)
+    if previous and previous[-1].file_sha256 == digest:
+        raise NothingToIssue(f"nothing has changed since report issue {previous[-1].id}")
+    amends = previous[-1].id if previous and any(line.amended for line in view.lines) else None
+    lines = tuple(ReportLine(sample=line.sample, analyte=line.analyte, version=line.version) for line in view.lines)
+    issued = wf.record_issue(session, tr_number, lines, digest, actor_for(user), amends)
+
+    target = TRStatus.COMPLETE_REPORT if report_complete(view, submission) else TRStatus.PARTIAL_REPORT
+    moved = None
+    if submission.status in (TRStatus.IN_PROGRESS, TRStatus.PARTIAL_REPORT):  # forward only
+        note = f"report issue {issued.issue_id}" + (" (amended)" if issued.amended else "")
+        service.change_status(tr_number, StatusChangeIn(to_status=target, note=note), user)
+        moved = target
+    return {"issue_id": issued.issue_id, "amended": issued.amended, "amends": amends, "sha256": digest,
+            "lines": len(lines), "status": int(moved) if moved else None}

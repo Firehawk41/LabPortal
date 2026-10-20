@@ -62,8 +62,10 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    (/results upload preview/import → evaluate, batch page, /api/results), staff `lab_role` (supervisor sets
    roles), `cli migrate`. Slice 2 ✅: batch page + API actions (review batch, accept, rerun, exception,
    reject, correct, re-evaluate, release per sample + analysis; 409 when role / four-eyes / state refuse);
-   first readings move a received TR to in progress (D-71; a release never moves the TR). Next: slice 3
-   report view + issues (→ partial / complete report), demo personas (D-50), demo scenarios.
+   first readings move a received TR to in progress (D-71; a release never moves the TR); reason categories
+   from the policy's list (D-72). Slice 3: /results/reports/{tr} + "Issue report" ✅ (D-73: sha256 of the
+   canonical report JSON until the report engine is wired; TR → partial / complete report). Next: demo
+   personas (D-50), demo scenarios.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
@@ -106,7 +108,7 @@ slim_lab_portal/
 ├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
 ├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
 ├── results.py       # slim-data host side: TrSampleTables, SpecReader, StaffDirectory, actor_for, demo rules
-├── results_routes.py  # /results (upload, batches) and /api/results — staff only
+├── results_routes.py  # /results (upload, batches, reports) and /api/results — staff only
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout

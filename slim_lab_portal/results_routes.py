@@ -9,6 +9,8 @@
          action: accept | rerun | exception | reject | correct
     POST /api/results/samples/{sample}/analyses/{analysis_id}/release
     GET  /api/results/reason-categories   the policy's fixed lists for accept and exception (D-72)
+    /results/reports/{tr}         the report as it stands, its issues, and "Issue report" (D-73)
+    GET  /api/results/reports/{tr}   POST /api/results/reports/{tr}/issue
 
 An import is all or nothing: the file's readings, then an evaluation of every batch it touches,
 and received TRs moved to in progress (D-71), in one transaction. A release changes results only.
@@ -32,7 +34,8 @@ from slim_data.domain.workflow import UnknownCategory, WorkflowError
 from slim_data.persistence.rulesets import current_policy
 from slim_data.service import workflow as wf
 from slim_data.service.imports import ImportPlan, ImportRefused, preview_import
-from slim_data.service.views import batch_view, batches
+from slim_data.persistence.results import issues_for_tr
+from slim_data.service.views import batch_view, batches, report_view
 
 from slim_lab_portal.api import Service, get_reference
 from slim_lab_portal.auth import RequireStaff
@@ -43,12 +46,17 @@ from slim_lab_portal.results import (
     StaffDirectory,
     act_on_result,
     actor_for,
+    document_sha256,
     import_and_evaluate,
+    issue_report,
     reference_lookup,
+    report_complete,
+    report_document,
     start_work,
 )
 from slim_lab_portal.schemas import ReEvaluateIn, ResultActionIn, SignOffIn
 from slim_lab_portal.services import Conflict
+from slim_lab_portal.services import NotFound as TRNotFound
 from slim_lab_portal.security import csrf_protect
 from slim_lab_portal.web import flash, render
 
@@ -129,14 +137,35 @@ def _decide(db: Session, action) -> tuple[int, dict[str, Any]]:
     except WorkflowError as error:
         db.rollback()
         return 409, {"detail": str(error)}
-    except NotFound as error:
+    except (NotFound, TRNotFound) as error:
         db.rollback()
         return 404, {"detail": str(error)}
+    except Conflict as error:  # the TR changed under us
+        db.rollback()
+        return 409, {"detail": str(error)}
     except ValidationError as error:  # e.g. an exception without a note
         db.rollback()
         return 422, {"detail": "; ".join(e["msg"].removeprefix("Value error, ") for e in error.errors())}
     db.commit()
     return 200, body
+
+
+def _report(db: Session, service, tr_number: str, user) -> dict[str, Any]:
+    """The report as it stands now, and every issue so far (raises the portal's NotFound)."""
+    submission = service.get(tr_number, user)
+    view = report_view(db, tr_number)
+    document = report_document(view)
+    return {
+        **document,
+        "waiting": list(view.waiting),
+        "complete": report_complete(view, submission),
+        "sha256": document_sha256(document) if view.lines else None,
+        "issues": [
+            {"id": i.id, "sha256": i.file_sha256, "amends": i.amends, "lines": len(i.lines),
+             "by": i.created_by.display, "at": i.created_at.isoformat() if i.created_at else None}
+            for i in issues_for_tr(db, tr_number)
+        ],
+    }
 
 
 def _categories(db: Session) -> dict[str, list[str]]:
@@ -357,3 +386,38 @@ def api_release(sample: str, analysis_id: int, data: SignOffIn, user: RequireSta
 @api_router.get("/reason-categories", summary="The reason categories accept and exception may give (D-72)")
 def api_reason_categories(user: RequireStaff, db: DB):
     return _categories(db)
+
+
+@router.get("/results/reports/{tr_number}", name="results_report")
+def results_report(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service,
+                   reference: Reference):
+    try:
+        report = _report(db, service, tr_number, user)
+    except TRNotFound:
+        return render(request, "error.html", {"status": 404, "message": f"Testing Request {tr_number} not found."}, 404)
+    return render(request, "results/report.html", {"r": report, "reference": reference})
+
+
+@router.post("/results/reports/{tr_number}/issue", name="results_issue")
+def results_issue(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service):
+    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user))
+    if status == 200:
+        amended = f" (amends issue {body['amends']})" if body["amended"] else ""
+        flash(request, f"Report issue {body['issue_id']} recorded{amended}: {body['lines']} result(s).")
+    else:
+        flash(request, str(body["detail"]), "error")
+    return RedirectResponse(request.url_for("results_report", tr_number=tr_number).path, status_code=303)
+
+
+@api_router.get("/reports/{tr_number}", summary="The report as it stands (released results) and its issues")
+def api_report(tr_number: str, user: RequireStaff, db: DB, service: Service):
+    try:
+        return _report(db, service, tr_number, user)
+    except TRNotFound:
+        raise HTTPException(status_code=404, detail=f"Testing Request {tr_number} not found.") from None
+
+
+@api_router.post("/reports/{tr_number}/issue", summary="Record a report issue; moves the TR to partial / complete report")
+def api_issue(tr_number: str, user: RequireStaff, db: DB, service: Service):
+    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user))
+    return JSONResponse(body, status_code=201 if status == 200 else status)

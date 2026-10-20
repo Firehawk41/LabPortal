@@ -410,3 +410,78 @@ def test_accept_offers_the_policys_categories(app, lab):
         assert '<select name="reason_category" required>' in page
         assert "<option>Blank contribution assessed as negligible</option>" in page
         assert "Released without rerun" not in page  # exception categories only on RERUN results
+
+
+# ---------------------------------------------------------------- slice 3: report issues (D-73)
+
+def released(app, *positions, **csv_args):
+    """AN uploads, RV reviews and releases the given samples of TR00001."""
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv:
+        upload(an, csv(**csv_args))
+        rv.post("/api/results/batches/PB-1/review", json={})
+        for position in positions:
+            assert rv.post(f"/api/results/samples/TR00001-0{position}/analyses/5/release", json={}).status_code == 200
+
+
+def test_issues_move_the_tr_to_partial_then_complete(app, lab):
+    released(app, 1)
+    with staff_api(app, "RV") as rv:
+        report = rv.get("/api/results/reports/TR00001").json()
+        assert [line["sample"] for line in report["lines"]] == ["TR00001-01"]
+        assert report["waiting"] == ["TR00001-02 Fe"] and not report["complete"]
+
+        first = rv.post("/api/results/reports/TR00001/issue")
+        assert first.status_code == 201 and first.json()["status"] == TRStatus.PARTIAL_REPORT
+        assert first.json()["sha256"] == report["sha256"]
+        again = rv.post("/api/results/reports/TR00001/issue")
+        assert again.status_code == 409 and "nothing has changed" in again.json()["detail"]
+
+        rv.post(f"{SAMPLE_2}/release", json={})
+        second = rv.post("/api/results/reports/TR00001/issue").json()
+        assert second["lines"] == 2 and second["status"] == TRStatus.COMPLETE_REPORT and not second["amended"]
+        assert tr_status(rv) == TRStatus.COMPLETE_REPORT
+        history = rv.get("/api/submissions/TR00001").json()["status_history"]
+        assert [e["note"] for e in history[-2:]] == [f"report issue {first.json()['issue_id']}",
+                                                     f"report issue {second['issue_id']}"]
+        assert [i["id"] for i in rv.get("/api/results/reports/TR00001").json()["issues"]] == [
+            first.json()["issue_id"], second["issue_id"]]
+
+
+def test_a_corrected_result_makes_an_amended_report(app, lab):
+    released(app, 1, 2)
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv:
+        first = rv.post("/api/results/reports/TR00001/issue").json()
+        an.post(f"{SAMPLE_1}/analytes/Fe/correct", json={"note": "wrong dilution"})
+        an.post("/api/results/batches/PB-1/re-evaluate", json={})
+        rv.post("/api/results/batches/PB-1/review", json={})
+        rv.post(f"{SAMPLE_1}/release", json={})
+        amended = rv.post("/api/results/reports/TR00001/issue").json()
+        assert amended["amended"] and amended["amends"] == first["issue_id"]
+        assert amended["status"] is None and tr_status(rv) == TRStatus.COMPLETE_REPORT  # forward only
+        line = next(li for li in rv.get("/api/results/reports/TR00001").json()["lines"] if li["sample"] == "TR00001-01")
+        assert line["amended"] and line["version"] == 2
+
+
+def test_nothing_released_or_unknown_tr(app, lab):
+    with staff_api(app, "RV") as rv:
+        empty = rv.post("/api/results/reports/TR00001/issue")
+        assert empty.status_code == 409 and "no released results" in empty.json()["detail"]
+        assert rv.post("/api/results/reports/TR09999/issue").status_code == 404
+        assert rv.get("/api/results/reports/TR09999").status_code == 404
+        assert rv.get("/results/reports/TR09999").status_code == 404
+
+
+def test_report_page_issues_and_is_staff_only(app, lab, customer_user):
+    released(app, 1)
+    with staff_api(app, "RV") as rv:
+        assert "Results report" in rv.get("/requests/TR00001").text
+        page = rv.get("/results/reports/TR00001")
+        assert "10.050" in page.text and "Waiting: TR00001-02 Fe" in page.text and "Not issued yet" in page.text
+        issued = rv.post("/results/reports/TR00001/issue", data={"csrf_token": csrf_from(page.text)})
+        assert "Report issue" in issued.text and "recorded: 1 result(s)" in issued.text
+        refused = rv.post("/results/reports/TR00001/issue", data={"csrf_token": csrf_from(page.text)})
+        assert "nothing has changed" in refused.text
+    with TestClient(app) as client:
+        login_api(client, "jane@acme.example")
+        assert client.get("/api/results/reports/TR00001").status_code == 403
+        assert client.post("/api/results/reports/TR00001/issue").status_code == 403
