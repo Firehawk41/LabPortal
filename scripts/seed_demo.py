@@ -13,6 +13,8 @@ What it does, in order:
   4. Runs slim-data's migrations and publishes its demo metals ruleset (bound to 10 Elements by
      catalog code, D-70) and demo policy. Both are content-hashed: re-running changes nothing.
   5. Creates the demo personas (data/demo_personas.csv); offered only when DEMO_PERSONAS is on.
+  6. Runs slim-data's named demo scenarios on real TRs (slim-data D-75), once: skipped when results
+     exist, or with --no-scenarios.
 
 Requires slim-domain and slim-report-engine (the OSS packages) to be installed, e.g.
     pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
@@ -36,9 +38,10 @@ from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.oss_guard import assert_oss_database
+from slim_lab_portal.demo_scenarios import seed_scenarios
 from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.reference_cache import load_reference
-from slim_lab_portal.results import DEMO_RULESET_ANALYSIS, migrate_slim_data, publish_demo_rules
+from slim_lab_portal.results import DEMO_RULESET_ANALYSIS, SpecReader, migrate_slim_data, publish_demo_rules
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OSS_DIR = REPO_ROOT.parent / "slim-report-engine-oss"
@@ -73,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--oss-report-engine", type=Path,
                         default=Path(os.environ.get("SLIM_REPORT_ENGINE_OSS_DIR", DEFAULT_OSS_DIR)),
                         help="checkout of slim-report-engine-oss (default: %(default)s)")
+    parser.add_argument("--no-scenarios", action="store_true", help="skip slim-data's demo scenarios")
     args = parser.parse_args(argv)
 
     settings = load_settings()
@@ -111,11 +115,18 @@ def main(argv: list[str] | None = None) -> int:
 
     migrate_slim_data(portal_engine)
     with make_session_factory(portal_engine)() as session:
-        analysis_id = publish_demo_rules(session, load_reference(slim_engine, portal_engine))
+        reference = load_reference(slim_engine, portal_engine)
+        analysis_id = publish_demo_rules(session, reference)
         personas = sync_personas(session)
+        session.commit()
+        scenarios = {} if args.no_scenarios else seed_scenarios(session, reference, SpecReader(slim_engine))
         session.commit()
     print(f"slim-data: demo ruleset published for {DEMO_RULESET_ANALYSIS} (analysis {analysis_id}), demo policy.")
     print(f"{personas} demo personas (offered when DEMO_PERSONAS is on).")
+    if scenarios:
+        print("Demo scenarios: " + ", ".join(f"{name} {tr}" for name, tr in scenarios.items()))
+    elif not args.no_scenarios:
+        print("Demo scenarios: results exist already -- left untouched.")
     return 0
 
 

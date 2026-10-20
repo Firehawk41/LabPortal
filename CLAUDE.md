@@ -56,7 +56,7 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 9. ✅ Link-ready (portal only): shared-Postgres `docker-compose.yml` with a seed step; slim-lims bearer
    token (`LIMS_API_TOKEN`, `auth.ServiceClient`, `ActorType.SYSTEM`, limited to list/get/status and to
    in progress / partial / complete report); contract in spec §12 + `tests/test_lims_contract.py`.
-10. 🚧 slim-data (results module) wiring — slim-data's M6 part 2, decisions in slim-data-oss
+10. ✅ slim-data (results module) wiring — slim-data's M6 part 2, decisions in slim-data-oss
    `docs/DECISIONS.md` D-70, three slices. Slice 1 ✅: `results.py` (ReferenceLookup / StaffDirectory over
    portal + SLIM tables, actor_for, demo ruleset bound to `10_elements_icpms` by code), `results_routes.py`
    (/results upload preview/import → evaluate, batch page, /api/results), staff `lab_role` (supervisor sets
@@ -66,7 +66,8 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    from the policy's list (D-72). Slice 3: /results/reports/{tr} + "Issue report" ✅ (D-73: sha256 of the
    canonical report JSON until the report engine is wired; TR → partial / complete report). Personas ✅
    (D-74: `personas.py`, `users.is_persona`, `DEMO_PERSONAS`, /demo/personas; ASSERTED; no user admin).
-   Next: demo scenarios.
+   Demo scenarios ✅ (D-75: `demo_scenarios.py` is slim-data's DemoHost; the seed runs the nine scenarios
+   once on real TRs). Next: walkthrough with the user.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
@@ -111,6 +112,7 @@ slim_lab_portal/
 ├── results.py       # slim-data host side: TrSampleTables, SpecReader, StaffDirectory, actor_for, demo rules
 ├── results_routes.py  # /results (upload, batches, reports) and /api/results — staff only
 ├── personas.py      # demo personas (DEMO_PERSONAS): data/demo_personas.csv -> users.is_persona rows
+├── demo_scenarios.py  # slim-data's demo scenarios on real TRs (PortalDemoHost, seed_scenarios); demo seed only
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
@@ -120,7 +122,7 @@ slim_lab_portal/
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
 └── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js
-scripts/seed_demo.py # Demo DB only: runs slim-report-engine-oss demo seed() if SLIM tables are empty, syncs catalog
+scripts/seed_demo.py # Demo DB only: SLIM demo data if empty, catalog, slim-data rules, personas, demo scenarios
 tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
 docs/SLIM_DOMAIN_V2.md
 ```
