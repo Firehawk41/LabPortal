@@ -81,8 +81,8 @@
                     {% set choices = [(actions.CORRECT, "Start a correction", "reason")] %}
                   {% else %}
                     {% set choices = [] %}
-                    {% if r.verdict.name == "NEEDS_SUPERVISOR" %}{% set choices = choices + [(actions.ACCEPT, "Accept", "category")] %}{% endif %}
-                    {% if r.verdict.name == "RERUN" %}{% set choices = choices + [(actions.EXCEPTION, "Release by exception", "category+reason")] %}{% endif %}
+                    {% if r.verdict.name == "NEEDS_SUPERVISOR" %}{% set choices = choices + [(actions.ACCEPT, "Accept", "accept")] %}{% endif %}
+                    {% if r.verdict.name == "RERUN" %}{% set choices = choices + [(actions.EXCEPTION, "Release by exception", "exception+reason")] %}{% endif %}
                     {% set choices = choices + [(actions.RERUN, "Request a rerun", ""), (actions.REJECT, "Reject", "reason")] %}
                   {% endif %}
                   {% for action, label, needs in choices %}
@@ -92,8 +92,12 @@
                       <input type="hidden" name="analysis_id" value="{{ r.analyte.analysis_id }}">
                       <input type="hidden" name="analyte" value="{{ r.analyte.code }}">
                       <input type="hidden" name="action" value="{{ action.value }}">
-                      {% if "category" in needs %}<label>Reason category (printed on the report)
-                        <input name="reason_category" maxlength="100" required></label>{% endif %}
+                      {% set kind = needs.split("+")[0] %}
+                      {% if kind in categories %}<label>Reason category (printed on the report)
+                        <select name="reason_category" required>
+                          <option value="">Choose…</option>
+                          {% for text in categories[kind] %}<option>{{ text }}</option>{% endfor %}
+                        </select></label>{% endif %}
                       <label>{{ "Reason" if "reason" in needs else "Note" }}
                         <input name="note" maxlength="2000" {% if "reason" in needs %}required{% endif %}></label>
                       <button type="submit" class="btn btn--secondary btn--small">{{ label }}</button>

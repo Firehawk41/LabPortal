@@ -8,11 +8,13 @@
     POST /api/results/samples/{sample}/analyses/{analysis_id}/analytes/{analyte}/{action}
          action: accept | rerun | exception | reject | correct
     POST /api/results/samples/{sample}/analyses/{analysis_id}/release
+    GET  /api/results/reason-categories   the policy's fixed lists for accept and exception (D-72)
 
 An import is all or nothing: the file's readings, then an evaluation of every batch it touches,
 and received TRs moved to in progress (D-71), in one transaction. A release changes results only.
 Errors: a refused file -> 422 with one entry per row error; an action the workflow or policy
-doesn't allow (role, four-eyes, state) -> 409; a missing reason -> 422; unknown batch/result -> 404.
+doesn't allow (role, four-eyes, state) -> 409; a missing reason or a category the policy doesn't
+list -> 422; unknown batch/result -> 404.
 """
 
 from typing import Annotated, Any
@@ -25,7 +27,9 @@ from sqlalchemy.orm import Session
 from slim_data.persistence._rows import NotFound
 from slim_data.engine.ruleset import RulesetError
 from slim_data.domain.values import AnalyteRef, SampleRef
-from slim_data.domain.workflow import WorkflowError
+from slim_data.domain.enums import Action
+from slim_data.domain.workflow import UnknownCategory, WorkflowError
+from slim_data.persistence.rulesets import current_policy
 from slim_data.service import workflow as wf
 from slim_data.service.imports import ImportPlan, ImportRefused, preview_import
 from slim_data.service.views import batch_view, batches
@@ -119,6 +123,9 @@ def _decide(db: Session, action) -> tuple[int, dict[str, Any]]:
     except wf.NothingReleased as error:
         db.rollback()
         return 409, {"detail": "Nothing was released.", "waiting": [f"{c}: {why}" for c, why in error.waiting]}
+    except UnknownCategory as error:
+        db.rollback()
+        return 422, {"detail": str(error)}
     except WorkflowError as error:
         db.rollback()
         return 409, {"detail": str(error)}
@@ -130,6 +137,16 @@ def _decide(db: Session, action) -> tuple[int, dict[str, Any]]:
         return 422, {"detail": "; ".join(e["msg"].removeprefix("Value error, ") for e in error.errors())}
     db.commit()
     return 200, body
+
+
+def _categories(db: Session) -> dict[str, list[str]]:
+    """The reason categories the published policy lists (D-72); empty before one is published."""
+    published = current_policy(db)
+    policy = published.policy if published else None
+    return {
+        "accept": list(policy.categories(Action.ACCEPT)) if policy else [],
+        "exception": list(policy.categories(Action.RECORD_EXCEPTION)) if policy else [],
+    }
 
 
 def _result_key(sample: str, analysis_id: int, analyte: str) -> tuple[SampleRef, AnalyteRef]:
@@ -221,6 +238,7 @@ def results_batch(request: Request, code: str, user: RequireStaff, db: DB, refer
                             key=lambda k: (k[0].tr_number, k[0].position, k[1]))
     return render(request, "results/batch.html", {
         "view": view, "reference": reference, "release_groups": release_groups, "actions": ResultAction,
+        "categories": _categories(db),
     })
 
 
@@ -334,3 +352,8 @@ def api_release(sample: str, analysis_id: int, data: SignOffIn, user: RequireSta
     sample_ref, _ = _result_key(sample, analysis_id, "X")
     status, body = _release(db, user, sample_ref, analysis_id, data)
     return JSONResponse(body, status_code=status)
+
+
+@api_router.get("/reason-categories", summary="The reason categories accept and exception may give (D-72)")
+def api_reason_categories(user: RequireStaff, db: DB):
+    return _categories(db)

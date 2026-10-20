@@ -331,9 +331,11 @@ def test_needs_supervisor_is_accepted_by_a_supervisor(app, lab):
         assert rv.post("/api/results/batches/PB-1/review", json={}).status_code == 200
         waiting = rv.post(f"{SAMPLE_2}/release", json={})
         assert waiting.status_code == 409 and "acceptance" in waiting.json()["waiting"][0]
-        assert rv.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL from validation"}).status_code == 409
+        assert rv.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL taken from the method validation"}).status_code == 409
         assert jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={}).status_code == 422  # needs a category
-        accepted = jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL from validation"})
+        unlisted = jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "looks fine"})
+        assert unlisted.status_code == 422 and "choose one of" in unlisted.json()["detail"]  # D-72
+        accepted = jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL taken from the method validation"})
         assert accepted.status_code == 200 and accepted.json()["event"] == "accepted"
         assert rv.post(f"{SAMPLE_2}/release", json={}).json()["released"] == ["Fe"]
 
@@ -341,9 +343,10 @@ def test_needs_supervisor_is_accepted_by_a_supervisor(app, lab):
 def test_rerun_results_need_a_rerun_or_a_supervisors_exception(app, lab):
     with staff_api(app, "AN") as an, staff_api(app, "RV") as rv, staff_api(app, "JM") as jm:
         upload(an, csv(spike="60"))
-        body = {"reason_category": "Recovery outside window", "note": "matrix interference, confirmed"}
+        body = {"reason_category": "Matrix interference confirmed", "note": "seen before on this matrix"}
         assert rv.post(f"{SAMPLE_1}/analytes/Fe/exception", json=body).status_code == 409
-        assert jm.post(f"{SAMPLE_1}/analytes/Fe/exception", json={"reason_category": "x"}).status_code == 422
+        no_note = {"reason_category": "Matrix interference confirmed"}
+        assert jm.post(f"{SAMPLE_1}/analytes/Fe/exception", json=no_note).status_code == 422
         assert jm.post(f"{SAMPLE_1}/analytes/Fe/exception", json=body).json()["event"] == "exception"
         assert rv.post(f"{SAMPLE_2}/analytes/Fe/rerun", json={"note": "spike again"}).json()["event"] == "rerun_requested"
         # Waiting on its rerun, sample 2 is left out of the review; sample 1 is reviewed and released.
@@ -382,6 +385,7 @@ def test_batch_page_actions(app, lab):
         upload(an, csv())
         page = an.get("/results/batches/PB-1")
         assert "Review every draft" in page.text and "Request a rerun" in page.text and "Release" in page.text
+        assert an.get("/api/results/reason-categories").json()["exception"][0] == "Released without rerun"
         token = csrf_from(page.text)
         refused = an.post("/results/batches/PB-1/review", data={"csrf_token": token})
         assert "Nothing was reviewed" in refused.text and "needs REVIEWER" in refused.text
@@ -397,3 +401,12 @@ def test_batch_page_actions(app, lab):
         assert "TR00001-02 Fe: rejected." in rejected.text
         reevaluated = rv.post("/results/batches/PB-1/re-evaluate", data={"csrf_token": token})
         assert "Re-evaluated: 0 new version(s)" in reevaluated.text
+
+
+def test_accept_offers_the_policys_categories(app, lab):
+    with staff_api(app, "AN") as an:
+        upload(an, csv(mdl_2=""))
+        page = an.get("/results/batches/PB-1").text
+        assert '<select name="reason_category" required>' in page
+        assert "<option>Blank contribution assessed as negligible</option>" in page
+        assert "Released without rerun" not in page  # exception categories only on RERUN results
