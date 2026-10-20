@@ -10,6 +10,8 @@ What it does, in order:
      already hold data they are LEFT UNTOUCHED: this script never writes into a populated
      SLIM database.
   3. Syncs the portal-owned analysis_catalog from slim_lab_portal/data/analysis_catalog.csv.
+  4. Runs slim-data's migrations and publishes its demo metals ruleset (bound to 10 Elements by
+     catalog code, D-70) and demo policy. Both are content-hashed: re-running changes nothing.
 
 Requires slim-domain and slim-report-engine (the OSS packages) to be installed, e.g.
     pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
@@ -33,6 +35,8 @@ from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.oss_guard import assert_oss_database
+from slim_lab_portal.reference_cache import load_reference
+from slim_lab_portal.results import DEMO_RULESET_ANALYSIS, migrate_slim_data, publish_demo_rules
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OSS_DIR = REPO_ROOT.parent / "slim-report-engine-oss"
@@ -102,6 +106,12 @@ def main(argv: list[str] | None = None) -> int:
     if report.not_in_catalog:
         print(f"  {len(report.not_in_catalog)} SLIM analyses with no catalog entry (not offered): "
               + ", ".join(report.not_in_catalog))
+
+    migrate_slim_data(portal_engine)
+    with make_session_factory(portal_engine)() as session:
+        analysis_id = publish_demo_rules(session, load_reference(slim_engine, portal_engine))
+        session.commit()
+    print(f"slim-data: demo ruleset published for {DEMO_RULESET_ANALYSIS} (analysis {analysis_id}), demo policy.")
     return 0
 
 

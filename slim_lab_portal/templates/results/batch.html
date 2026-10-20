@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Batch {{ view.code }} — YourLab{% endblock %}
+{% block body_class %}page-wide{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Prep batch {{ view.code }}</h1>
+    <a href="{{ url_for('results_home') }}">All batches</a>
+  </div>
+  <p class="muted">{{ view.prep_method }} · {{ view.samples|length }} sample{{ "" if view.samples|length == 1 else "s" }}:
+    {% for s in view.samples %}{{ s }}{{ ", " if not loop.last }}{% endfor %}</p>
+
+  {% if view.results %}
+    <table class="table">
+      <thead><tr>
+        <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th><th scope="col">Result</th>
+        <th scope="col">Verdict</th><th scope="col">Status</th><th scope="col">Version</th><th scope="col">Flags</th>
+      </tr></thead>
+      <tbody>
+        {% for r in view.results %}
+          {% set analysis = reference.analysis(r.analyte.analysis_id) %}
+          <tr>
+            <td><a href="{{ url_for('request_detail', tr_number=r.sample.tr_number) }}">{{ r.sample }}</a></td>
+            <td>{{ analysis.name if analysis else r.analyte.analysis_id }}</td>
+            <td>{{ r.analyte.code }}</td>
+            <td>{{ r.text }}</td>
+            <td>{{ r.verdict.name.replace("_", " ").lower() }}</td>
+            <td>{{ r.status.name.lower() }}{% if r.rerun_requested %} · rerun requested{% endif %}{% if r.correction_started %} · correcting{% endif %}</td>
+            <td>v{{ r.version }}</td>
+            <td>{% for f in r.flags %}<span title="{{ f.message }}">{{ f.code }}</span> ({{ f.severity.name.lower() }}){{ "; " if not loop.last }}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No results yet.</p>
+  {% endif %}
+{% endblock %}

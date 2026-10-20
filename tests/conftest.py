@@ -8,7 +8,7 @@ from slim_lab_portal.config import Settings
 from slim_lab_portal.db import Base, make_engine, make_session_factory
 from slim_lab_portal.main import create_app
 from slim_lab_portal.domain import RequestType
-from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.models import LAB_ROLE_SUPERVISOR, ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import AnalysisRef, ChemicalRef, CustomerRef, ElementRef, StaticReferenceData
 from slim_lab_portal.security import hash_password
 from slim_lab_portal.slim_tables import slim_metadata
@@ -69,7 +69,8 @@ def client(app):
 
 @pytest.fixture
 def staff_user(db):
-    user = User(email="staff@lab.example", password_hash=hash_password(PASSWORD), role=ROLE_STAFF, initials="JM")
+    user = User(email="staff@lab.example", password_hash=hash_password(PASSWORD), role=ROLE_STAFF, initials="JM",
+                lab_role=LAB_ROLE_SUPERVISOR)
     db.add(user)
     db.commit()
     return user

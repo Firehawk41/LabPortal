@@ -26,6 +26,10 @@ ROLE_CUSTOMER = "customer"
 ROLE_STAFF = "staff"
 VALID_ROLES = (ROLE_CUSTOMER, ROLE_STAFF)
 
+# Staff lab roles, stored as slim-data's Role values (tiered: a higher role can do what a lower can).
+LAB_ROLE_ANALYST, LAB_ROLE_REVIEWER, LAB_ROLE_SUPERVISOR = 1, 2, 3
+LAB_ROLES = {LAB_ROLE_ANALYST: "Analyst", LAB_ROLE_REVIEWER: "Reviewer", LAB_ROLE_SUPERVISOR: "Supervisor"}
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -39,6 +43,8 @@ class User(Base):
         CheckConstraint("role IN ('customer', 'staff')", name="role_valid"),
         CheckConstraint("role <> 'customer' OR customer_id IS NOT NULL", name="customer_has_customer_id"),
         CheckConstraint("role <> 'staff' OR (initials IS NOT NULL AND initials <> '')", name="staff_has_initials"),
+        CheckConstraint("role <> 'staff' OR lab_role IS NOT NULL", name="staff_has_lab_role"),
+        CheckConstraint("lab_role IS NULL OR lab_role IN (1, 2, 3)", name="lab_role_valid"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -46,7 +52,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20))
     customer_id: Mapped[int | None] = mapped_column(Integer, index=True)  # SLIM customers."ID"
-    initials: Mapped[str | None] = mapped_column(String(10))
+    # Staff ID in result files (the `analyst` column), so unique among staff (D-70).
+    initials: Mapped[str | None] = mapped_column(String(10), unique=True)
+    lab_role: Mapped[int | None] = mapped_column(Integer)  # staff only: LAB_ROLES
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

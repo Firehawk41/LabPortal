@@ -76,6 +76,7 @@ class ReferenceData(Protocol):
     def chemical_choices(self) -> list[ChemicalRef]: ...
     def element_choices(self) -> list[ElementRef]: ...
     def analyses_for(self, request_type: RequestType) -> list[AnalysisRef]: ...
+    def catalog_analyses(self) -> list[AnalysisRef]: ...
 
 
 @dataclass
@@ -139,6 +140,10 @@ class StaticReferenceData:
 
     def element_choices(self) -> list[ElementRef]:
         return sorted(self.elements.values(), key=lambda e: e.id)
+
+    def catalog_analyses(self) -> list[AnalysisRef]:
+        """Every analysis with an analysis_catalog code, offered in the form or not (slim-data's codes)."""
+        return sorted((a for a in self.analyses.values() if a.code), key=lambda a: a.code)
 
     def analyses_for(self, request_type: RequestType) -> list[AnalysisRef]:
         def key(a: AnalysisRef):

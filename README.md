@@ -55,7 +55,7 @@ cp .env.example .env
 # Fictional SLIM reference data from the OSS repos (checked out next to this one):
 pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
 python scripts/seed_demo.py
-PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM
+PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM --lab-role supervisor
 uvicorn --factory slim_lab_portal.main:create_app --reload
 ```
 

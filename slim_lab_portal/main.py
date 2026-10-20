@@ -16,6 +16,9 @@ from slim_lab_portal.config import Settings, load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.reference_cache import ReferenceCache
+from slim_lab_portal.results import SpecReader
+from slim_lab_portal.results_routes import api_router as results_api_router
+from slim_lab_portal.results_routes import router as results_router
 from slim_lab_portal.routes import router as pages_router
 from slim_lab_portal.security import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from slim_lab_portal.web import STATIC_DIR, render
@@ -31,6 +34,7 @@ def create_app(
     settings: Settings | None = None,
     engine=None,
     reference: ReferenceData | None = None,
+    specs=None,
 ) -> FastAPI:
     settings = settings or load_settings()
     engine = engine or make_engine(settings.database_url)
@@ -45,12 +49,14 @@ def create_app(
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
+    slim_engine = engine
+    if settings.slim_database_url and settings.slim_database_url != settings.database_url:
+        slim_engine = make_engine(settings.slim_database_url)
     if reference is None:
-        slim_engine = engine
-        if settings.slim_database_url and settings.slim_database_url != settings.database_url:
-            slim_engine = make_engine(settings.slim_database_url)
         reference = ReferenceCache(slim_engine, engine, ttl_seconds=settings.reference_cache_ttl_seconds)
     app.state.reference = reference
+    # SLIM spec limits for slim-data: (customer_id, chemical_id, location) -> {element: limit}.
+    app.state.specs = specs or SpecReader(slim_engine)
 
     # Last added = outermost. Headers wrap everything, including 413s and session errors.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
@@ -69,6 +75,8 @@ def create_app(
     app.include_router(pages_router)
     app.include_router(submissions_router)
     app.include_router(reference_router)
+    app.include_router(results_router)
+    app.include_router(results_api_router)
     register_error_handlers(app)
 
     @app.exception_handler(LoginRequired)

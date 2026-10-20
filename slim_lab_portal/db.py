@@ -35,14 +35,22 @@ def make_engine(url: str, **kwargs) -> Engine:
         kwargs.setdefault("pool_pre_ping", True)
     engine = create_engine(url, **kwargs)
     if url.startswith("sqlite"):
-        event.listen(engine, "connect", _sqlite_enable_foreign_keys)
+        event.listen(engine, "connect", _sqlite_connect)
+        event.listen(engine, "begin", _sqlite_begin)
     return engine
 
 
-def _sqlite_enable_foreign_keys(dbapi_connection, _record) -> None:
+def _sqlite_connect(dbapi_connection, _record) -> None:
+    # pysqlite starts transactions itself and breaks SAVEPOINT, which slim-data's all-or-nothing
+    # import needs; let SQLAlchemy emit BEGIN instead (the documented recipe, as slim-data does).
+    dbapi_connection.isolation_level = None
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
+
+
+def _sqlite_begin(connection) -> None:
+    connection.exec_driver_sql("BEGIN")
 
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:

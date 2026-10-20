@@ -14,7 +14,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install ."
-    startCommand: "alembic -c slim_lab_portal/alembic.ini upgrade head && uvicorn --factory slim_lab_portal.main:create_app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
+    startCommand: "python -m slim_lab_portal.cli migrate && uvicorn --factory slim_lab_portal.main:create_app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.15"
