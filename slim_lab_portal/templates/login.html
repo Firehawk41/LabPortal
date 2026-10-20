@@ -28,4 +28,7 @@
       <button type="submit" class="btn btn--primary">Log In</button>
     </form>
   </section>
+  {% if request.app.state.settings.demo_personas %}
+    <p>Visiting the demo? <a href="{{ url_for('demo_personas') }}">Continue as a demo persona</a>.</p>
+  {% endif %}
 {% endblock %}

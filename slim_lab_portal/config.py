@@ -25,6 +25,8 @@ class Settings:
     lab_timezone: str = "America/Chicago"
     # Bearer token slim-lims uses for the API (spec §12). Unset = no machine access.
     lims_api_token: str | None = None
+    # Public sandbox: offer "Continue as..." demo personas, recorded as ASSERTED (slim-data D-50).
+    demo_personas: bool = False
 
     @property
     def is_production(self) -> bool:
@@ -70,4 +72,5 @@ def load_settings() -> Settings:
         reference_cache_ttl_seconds=int(os.environ.get("REFERENCE_CACHE_TTL_SECONDS", 300)),
         lab_timezone=os.environ.get("LAB_TIMEZONE", "America/Chicago"),
         lims_api_token=lims_api_token,
+        demo_personas=_bool(os.environ.get("DEMO_PERSONAS"), False),
     )

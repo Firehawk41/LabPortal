@@ -64,8 +64,9 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    reject, correct, re-evaluate, release per sample + analysis; 409 when role / four-eyes / state refuse);
    first readings move a received TR to in progress (D-71; a release never moves the TR); reason categories
    from the policy's list (D-72). Slice 3: /results/reports/{tr} + "Issue report" ✅ (D-73: sha256 of the
-   canonical report JSON until the report engine is wired; TR → partial / complete report). Next: demo
-   personas (D-50), demo scenarios.
+   canonical report JSON until the report engine is wired; TR → partial / complete report). Personas ✅
+   (D-74: `personas.py`, `users.is_persona`, `DEMO_PERSONAS`, /demo/personas; ASSERTED; no user admin).
+   Next: demo scenarios.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
@@ -109,12 +110,13 @@ slim_lab_portal/
 ├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
 ├── results.py       # slim-data host side: TrSampleTables, SpecReader, StaffDirectory, actor_for, demo rules
 ├── results_routes.py  # /results (upload, batches, reports) and /api/results — staff only
+├── personas.py      # demo personas (DEMO_PERSONAS): data/demo_personas.csv -> users.is_persona rows
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
-├── cli.py           # migrate (portal + slim-data), create-staff, create-customer-user, sync-analysis-catalog
+├── cli.py           # migrate (portal + slim-data), create-staff, create-customer-user, sync-analysis-catalog, sync-personas
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
 └── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js
@@ -139,6 +141,8 @@ docs/SLIM_DOMAIN_V2.md
 - **Auth:** Starlette signed-cookie sessions (`SameSite=Lax`, `Secure` in production), bcrypt.
   Roles: `customer` (must have `customer_id`, a SLIM customer ID) and `staff` (must have
   `initials` and a `lab_role`: analyst / reviewer / supervisor). No self-registration; staff create users. Customers must already exist in SLIM.
+  Demo personas (`is_persona`, only with `DEMO_PERSONAS`) are chosen, not logged in: ASSERTED in slim-data,
+  refused by /login, no user or role admin.
 - **Machine access:** slim-lims uses `Authorization: Bearer $LIMS_API_TOKEN` (spec §12). Token
   requests skip CSRF and never use the session; only `auth.LIMS_ROUTES` are allowed. Keep
   `tests/test_lims_contract.py` passing — slim-lims is written against it.

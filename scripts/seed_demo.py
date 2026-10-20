@@ -12,6 +12,7 @@ What it does, in order:
   3. Syncs the portal-owned analysis_catalog from slim_lab_portal/data/analysis_catalog.csv.
   4. Runs slim-data's migrations and publishes its demo metals ruleset (bound to 10 Elements by
      catalog code, D-70) and demo policy. Both are content-hashed: re-running changes nothing.
+  5. Creates the demo personas (data/demo_personas.csv); offered only when DEMO_PERSONAS is on.
 
 Requires slim-domain and slim-report-engine (the OSS packages) to be installed, e.g.
     pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
@@ -35,6 +36,7 @@ from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.oss_guard import assert_oss_database
+from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.reference_cache import load_reference
 from slim_lab_portal.results import DEMO_RULESET_ANALYSIS, migrate_slim_data, publish_demo_rules
 
@@ -110,8 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     migrate_slim_data(portal_engine)
     with make_session_factory(portal_engine)() as session:
         analysis_id = publish_demo_rules(session, load_reference(slim_engine, portal_engine))
+        personas = sync_personas(session)
         session.commit()
     print(f"slim-data: demo ruleset published for {DEMO_RULESET_ANALYSIS} (analysis {analysis_id}), demo policy.")
+    print(f"{personas} demo personas (offered when DEMO_PERSONAS is on).")
     return 0
 
 

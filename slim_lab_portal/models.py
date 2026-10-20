@@ -17,7 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy import event
+from sqlalchemy import event, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slim_lab_portal.db import Base
@@ -56,6 +56,8 @@ class User(Base):
     initials: Mapped[str | None] = mapped_column(String(10), unique=True)
     lab_role: Mapped[int | None] = mapped_column(Integer)  # staff only: LAB_ROLES
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # A demo persona (personas.py): chosen, not logged in; never signs in through /login.
+    is_persona: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     @property

@@ -63,12 +63,13 @@ DEMO_RULESET_ANALYSIS = "10_elements_icpms"
 
 
 def actor_for(user: User) -> Actor:
-    """A logged-in staff user as slim-data sees them."""
+    """A staff user as slim-data sees them."""
     return Actor(
         id=str(user.id),
         display=user.initials or user.email,
         roles=frozenset({Role(user.lab_role)}) if user.lab_role else frozenset(),
-        identity_source=IdentitySource.AUTHENTICATED,
+        # A persona is a claim, not a login (D-50): the audit trail never says more than it knows.
+        identity_source=IdentitySource.ASSERTED if user.is_persona else IdentitySource.AUTHENTICATED,
     )
 
 

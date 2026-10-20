@@ -269,7 +269,9 @@ def create_user(
     error = None
     cid = _int_or_none(customer_id)
     role_id = _int_or_none(lab_role) or LAB_ROLE_ANALYST
-    if role not in (ROLE_CUSTOMER, ROLE_STAFF):
+    if user.is_persona:
+        error = "Demo personas can't manage users."
+    elif role not in (ROLE_CUSTOMER, ROLE_STAFF):
         error = "Choose a role."
     elif "@" not in email:
         error = "Enter a valid email address."
@@ -312,7 +314,9 @@ def toggle_user_active(request: Request, user_id: str, user: RequireStaff, db: D
         target = db.get(User, uuid.UUID(user_id))
     except ValueError:
         target = None
-    if target is None:
+    if user.is_persona:
+        flash(request, "Demo personas can't manage users.", "error")
+    elif target is None:
         flash(request, "User not found.", "error")
     elif target.id == user.id:
         flash(request, "You cannot deactivate yourself.", "error")
@@ -330,7 +334,9 @@ def set_lab_role(request: Request, user_id: str, user: RequireStaff, db: DB, lab
         target = db.get(User, uuid.UUID(user_id))
     except ValueError:
         target = None
-    if user.lab_role != LAB_ROLE_SUPERVISOR:
+    if user.is_persona:
+        flash(request, "Demo personas can't change lab roles.", "error")
+    elif user.lab_role != LAB_ROLE_SUPERVISOR:
         flash(request, "Only a supervisor can change lab roles.", "error")
     elif target is None or not target.is_staff:
         flash(request, "Staff user not found.", "error")

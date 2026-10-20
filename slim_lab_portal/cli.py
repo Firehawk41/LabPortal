@@ -4,6 +4,7 @@
     python -m slim_lab_portal.cli create-staff --email lab@example.com --initials JM --lab-role supervisor
     python -m slim_lab_portal.cli create-customer-user --email jane@acme.example --customer-id 3
     python -m slim_lab_portal.cli sync-analysis-catalog
+    python -m slim_lab_portal.cli sync-personas        # demo sandbox only (DEMO_PERSONAS)
 
 The password comes from the PORTAL_PASSWORD environment variable, or an interactive prompt.
 """
@@ -19,6 +20,7 @@ from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.models import LAB_ROLES, ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.results import migrate_slim_data
 from slim_lab_portal.security import hash_password
 
@@ -65,6 +67,15 @@ def _sync_catalog() -> int:
     return 0
 
 
+def _sync_personas() -> int:
+    settings = load_settings()
+    with make_session_factory(make_engine(settings.database_url))() as db:
+        count = sync_personas(db)
+        db.commit()
+    print(f"{count} demo personas in place (offered only when DEMO_PERSONAS is on).")
+    return 0
+
+
 def _migrate() -> int:
     """The portal's migrations, then slim-data's (its own tables and version table)."""
     from pathlib import Path
@@ -98,12 +109,15 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("sync-analysis-catalog", help="Refill analysis_catalog from data/analysis_catalog.csv")
     sub.add_parser("migrate", help="Apply the portal's and slim-data's database migrations")
+    sub.add_parser("sync-personas", help="Create/update the demo personas from data/demo_personas.csv")
 
     args = parser.parse_args(argv)
     if args.command == "sync-analysis-catalog":
         return _sync_catalog()
     if args.command == "migrate":
         return _migrate()
+    if args.command == "sync-personas":
+        return _sync_personas()
     if args.command == "create-staff":
         lab_role = next(k for k, v in LAB_ROLES.items() if v.lower() == args.lab_role)
         _create_user(args.email, ROLE_STAFF, initials=args.initials.strip().upper(), customer_id=None,
