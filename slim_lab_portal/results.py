@@ -16,6 +16,7 @@ slim-data flushes; the portal owns the transaction and commits (slim-data D-23).
 
 import json
 from collections.abc import Mapping
+from enum import StrEnum
 from functools import cache
 
 from sqlalchemy import Engine, select
@@ -25,19 +26,21 @@ from slim_data.adapters.slim import SlimReferenceLookup, TrSampleInfo
 from slim_data.domain.actor import Actor
 from slim_data.domain.enums import IdentitySource, Role
 from slim_data.domain.policy import DEMO_POLICY
-from slim_data.domain.values import SampleRef
+from slim_data.domain.values import AnalyteRef, SampleRef
 from slim_data.engine.ruleset import Ruleset
 from slim_data.persistence import migrate
 from slim_data.persistence.rulesets import publish_policy, publish_ruleset
 from slim_data.pipeline.generic_csv import GenericCsv
 from slim_data.rulesets import ruleset_text
 from slim_data.service.imports import ImportReceipt, import_run
+from slim_data.service import workflow as wf
 from slim_data.service.workflow import EvaluationReceipt, evaluate_batch
 
 from slim_lab_portal import slim_tables as t
 from slim_lab_portal.domain import TRStatus
 from slim_lab_portal.models import ROLE_STAFF, TRSampleRow, TRSubmissionRow, User
 from slim_lab_portal.reference import ReferenceData
+from slim_lab_portal.schemas import StatusChangeIn
 
 # A TR's samples take readings once received, until invoiced (corrections may need reruns).
 STATUSES_TAKING_RESULTS = frozenset(
@@ -169,10 +172,55 @@ def publish_demo_rules(session: Session, reference: ReferenceData) -> int:
 
 def import_and_evaluate(
     session: Session, content: bytes, filename: str, actor: Actor, lookup: SlimReferenceLookup, staff
-) -> tuple[ImportReceipt, dict[str, EvaluationReceipt]]:
+) -> tuple[ImportReceipt, dict[str, EvaluationReceipt], tuple[str, ...]]:
     """Imports a result file (all or nothing; refused with `ImportRefused`), then evaluates every
     prep batch it touches, so the batch page shows decided results straight away. A batch with no
-    published ruleset raises slim-data's NotFound: the caller rolls the whole upload back."""
+    published ruleset raises slim-data's NotFound: the caller rolls the whole upload back.
+    Also returns the TR numbers the file has readings for (the caller starts work on them, D-71)."""
     receipt = import_run(session, content, filename, actor, lookup, staff)
-    codes = sorted({row.prep_batch for row in GenericCsv().parse(content).rows})
-    return receipt, {code: evaluate_batch(session, code, actor, lookup) for code in codes}
+    rows = GenericCsv().parse(content).rows
+    codes = sorted({row.prep_batch for row in rows})
+    trs = tuple(sorted({row.sample.tr_number for row in rows if row.sample is not None}))
+    return receipt, {code: evaluate_batch(session, code, actor, lookup) for code in codes}, trs
+
+
+def start_work(service, tr_numbers, user: User) -> list[str]:
+    """D-71: a received TR moves to in progress when its first readings are imported, in the
+    import's transaction. Forward only: TRs already further along are left alone."""
+    started = []
+    for tr_number in tr_numbers:
+        if service.get(tr_number, user).status is TRStatus.RECEIVED:
+            service.change_status(
+                tr_number, StatusChangeIn(to_status=TRStatus.IN_PROGRESS, note="first results imported"), user
+            )
+            started.append(tr_number)
+    return started
+
+
+# ---------------------------------------------------------------- people's actions on results
+
+class ResultAction(StrEnum):
+    ACCEPT = "accept"
+    RERUN = "rerun"
+    EXCEPTION = "exception"
+    REJECT = "reject"
+    CORRECT = "correct"
+
+
+def act_on_result(
+    session: Session, action: ResultAction, sample: SampleRef, analyte: AnalyteRef, actor: Actor,
+    reason_category: str = "", note: str = "",
+):
+    """One person's decision on one result, under the published policy. Raises slim-data's
+    WorkflowError (not allowed), NotFound, or a ValidationError (e.g. a missing reason)."""
+    match action:
+        case ResultAction.ACCEPT:
+            return wf.accept(session, sample, analyte, actor, reason_category, note)
+        case ResultAction.RERUN:
+            return wf.request_rerun(session, sample, analyte, actor, note)
+        case ResultAction.EXCEPTION:
+            return wf.record_exception(session, sample, analyte, actor, reason_category, note)
+        case ResultAction.REJECT:
+            return wf.reject(session, sample, analyte, actor, note)
+        case ResultAction.CORRECT:
+            return wf.start_correction(session, sample, analyte, actor, note)

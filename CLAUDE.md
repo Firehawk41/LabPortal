@@ -60,8 +60,10 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    `docs/DECISIONS.md` D-70, three slices. Slice 1 ✅: `results.py` (ReferenceLookup / StaffDirectory over
    portal + SLIM tables, actor_for, demo ruleset bound to `10_elements_icpms` by code), `results_routes.py`
    (/results upload preview/import → evaluate, batch page, /api/results), staff `lab_role` (supervisor sets
-   roles), `cli migrate`. Next: slice 2 review/accept/exception/release + `ResultsReleased` → TR status;
-   slice 3 report view + issues, demo personas (D-50), demo scenarios.
+   roles), `cli migrate`. Slice 2 ✅: batch page + API actions (review batch, accept, rerun, exception,
+   reject, correct, re-evaluate, release per sample + analysis; 409 when role / four-eyes / state refuse);
+   first readings move a received TR to in progress (D-71; a release never moves the TR). Next: slice 3
+   report view + issues (→ partial / complete report), demo personas (D-50), demo scenarios.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,

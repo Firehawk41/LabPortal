@@ -65,11 +65,12 @@ def app(engine, reference):
 
 @pytest.fixture
 def lab(app, db, reference, staff_user):
-    """Demo rules published; analyst AN; TR00001 received (2 samples on 10 Elements), TR00002 only
+    """Demo rules published; JM supervisor (staff_user), RV reviewer, AN analyst; TR00001 received (2 samples on 10 Elements), TR00002 only
     submitted, TR00003 received on 36 Elements (no ruleset)."""
     publish_demo_rules(db, reference)
-    db.add(User(email="an@lab.example", password_hash=hash_password(PASSWORD), role=ROLE_STAFF, initials="AN",
-                lab_role=LAB_ROLE_ANALYST))
+    for initials, lab_role in (("AN", LAB_ROLE_ANALYST), ("RV", LAB_ROLE_REVIEWER)):
+        db.add(User(email=f"{initials.lower()}@lab.example", password_hash=hash_password(PASSWORD), role=ROLE_STAFF,
+                    initials=initials, lab_role=lab_role))
     repo = TRSubmissionRepository(db)
     for analysis, receive in ((TEN, True), (TEN, False), (THIRTY_SIX, True)):
         tr = repo.add(submission(samples=(sample(1, analysis_ids=(analysis,)), sample(2, analysis_ids=(analysis,)))))
@@ -80,17 +81,19 @@ def lab(app, db, reference, staff_user):
     return db
 
 
-def csv(tr="TR00001", analysis="10_elements_icpms", analyst="AN", batch="PB-1", run="RUN-1") -> bytes:
+def csv(tr="TR00001", analysis="10_elements_icpms", analyst="AN", batch="PB-1", run="RUN-1",
+        spike="29.90", mdl_2="0.05") -> bytes:
+    """Sample 1: cups agree, spiked (recovery ~0.99 by default); sample 2: cups agree, MDL `mdl_2`."""
     rows = [
-        (f"{tr}-01", "Fe", "CUP", 1, "10.10", ""), (f"{tr}-01", "Fe", "CUP", 2, "10.00", ""),
-        (f"{tr}-01", "Fe", "SPIKE", 1, "29.90", "20"),
-        (f"{tr}-02", "Fe", "CUP", 1, "5.10", ""), (f"{tr}-02", "Fe", "CUP", 2, "5.00", ""),
-        ("BLANK", "Fe", "BLANK", 1, "0.010", ""),
+        (f"{tr}-01", "Fe", "CUP", 1, "10.10", "", "0.05"), (f"{tr}-01", "Fe", "CUP", 2, "10.00", "", "0.05"),
+        (f"{tr}-01", "Fe", "SPIKE", 1, spike, "20", "0.05"),
+        (f"{tr}-02", "Fe", "CUP", 1, "5.10", "", mdl_2), (f"{tr}-02", "Fe", "CUP", 2, "5.00", "", mdl_2),
+        ("BLANK", "Fe", "BLANK", 1, "0.010", "", "0.05"),
     ]
     lines = [HEADER] + [
-        f"{s},{analysis},{code},{role},{rep},{value},ppb,0.05,1,{run},ICP-MS 1,{analyst},"
-        f"2026-10-10T09:00:00+00:00,{batch},microwave HNO3,{spike},,"
-        for s, code, role, rep, value, spike in rows
+        f"{s},{analysis},{code},{role},{rep},{value},ppb,{mdl},1,{run},ICP-MS 1,{analyst},"
+        f"2026-10-10T09:00:00+00:00,{batch},microwave HNO3,{added},,"
+        for s, code, role, rep, value, added, mdl in rows
     ]
     return ("\n".join(lines) + "\n").encode()
 
@@ -122,7 +125,9 @@ def test_import_evaluates_the_batch_and_is_idempotent(client, lab):
     view = client.get("/api/results/batches/PB-1").json()
     assert {(r["sample"]["position"], r["analyte"]["code"]) for r in view["results"]} == {(1, "Fe"), (2, "Fe")}
     # Entered by AN (the file's analyst) and JM (who uploaded it): neither may review them (D-66).
-    assert set(view["results"][0]["analyst_ids"]) == {str(u.id) for u in lab.scalars(select(User)) if u.initials}
+    assert set(view["results"][0]["analyst_ids"]) == {
+        str(u.id) for u in lab.scalars(select(User).where(User.initials.in_(["AN", "JM"])))
+    }
 
     again = upload(client, csv())
     assert again.status_code == 422 and "already imported" in again.json()["plan"]["errors"][0]["message"]
@@ -276,3 +281,119 @@ def test_staff_initials_are_unique(client, lab):
     form = {"csrf_token": _users_form(client), "email": "dup@lab.example", "role": "staff",
             "password": PASSWORD, "initials": "an"}
     assert "Initials AN are taken" in client.post("/admin/users", data=form).text
+
+
+# ---------------------------------------------------------------- slice 2: decisions on results
+
+def staff_api(app, initials: str) -> TestClient:
+    client = TestClient(app)
+    login_api(client, f"{initials.lower()}@lab.example" if initials != "JM" else "staff@lab.example")
+    return client
+
+
+def tr_status(client, tr="TR00001") -> int:
+    return client.get(f"/api/submissions/{tr}").json()["status"]
+
+
+SAMPLE_1 = "/api/results/samples/TR00001-01/analyses/5"
+SAMPLE_2 = "/api/results/samples/TR00001-02/analyses/5"
+
+
+def test_first_readings_start_work_on_the_tr(app, lab):
+    with staff_api(app, "AN") as an:
+        assert upload(an, csv()).json()["started"] == ["TR00001"]
+        assert tr_status(an) == TRStatus.IN_PROGRESS
+        history = an.get("/api/submissions/TR00001").json()["status_history"]
+        assert history[-1]["note"] == "first results imported"
+        # Forward only: a later file for the same TR starts nothing.
+        assert upload(an, csv(run="RUN-2", batch="PB-2"), name="run2.csv").json()["started"] == []
+
+
+def test_review_and_release_with_roles_and_four_eyes(app, lab):
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv, staff_api(app, "JM") as jm:
+        upload(jm, csv())  # JM uploads AN's file: both entered the readings
+        refused = an.post("/api/results/batches/PB-1/review", json={})
+        assert refused.status_code == 409 and "needs REVIEWER" in " ".join(refused.json()["problems"])
+        refused = jm.post("/api/results/batches/PB-1/review", json={})
+        assert refused.status_code == 409 and "entered readings" in " ".join(refused.json()["problems"])
+
+        assert rv.post("/api/results/batches/PB-1/review", json={"note": "ok"}).json() == {"reviewed": 2}
+        released = rv.post(f"{SAMPLE_1}/release", json={})
+        assert released.status_code == 200 and released.json()["released"] == ["Fe"]
+        assert tr_status(rv) == TRStatus.IN_PROGRESS  # a release moves results, not the TR (D-71)
+        again = rv.post(f"{SAMPLE_1}/release", json={})
+        assert again.status_code == 409
+
+
+def test_needs_supervisor_is_accepted_by_a_supervisor(app, lab):
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv, staff_api(app, "JM") as jm:
+        upload(an, csv(mdl_2=""))
+        assert rv.post("/api/results/batches/PB-1/review", json={}).status_code == 200
+        waiting = rv.post(f"{SAMPLE_2}/release", json={})
+        assert waiting.status_code == 409 and "acceptance" in waiting.json()["waiting"][0]
+        assert rv.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL from validation"}).status_code == 409
+        assert jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={}).status_code == 422  # needs a category
+        accepted = jm.post(f"{SAMPLE_2}/analytes/Fe/accept", json={"reason_category": "MDL from validation"})
+        assert accepted.status_code == 200 and accepted.json()["event"] == "accepted"
+        assert rv.post(f"{SAMPLE_2}/release", json={}).json()["released"] == ["Fe"]
+
+
+def test_rerun_results_need_a_rerun_or_a_supervisors_exception(app, lab):
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv, staff_api(app, "JM") as jm:
+        upload(an, csv(spike="60"))
+        body = {"reason_category": "Recovery outside window", "note": "matrix interference, confirmed"}
+        assert rv.post(f"{SAMPLE_1}/analytes/Fe/exception", json=body).status_code == 409
+        assert jm.post(f"{SAMPLE_1}/analytes/Fe/exception", json={"reason_category": "x"}).status_code == 422
+        assert jm.post(f"{SAMPLE_1}/analytes/Fe/exception", json=body).json()["event"] == "exception"
+        assert rv.post(f"{SAMPLE_2}/analytes/Fe/rerun", json={"note": "spike again"}).json()["event"] == "rerun_requested"
+        # Waiting on its rerun, sample 2 is left out of the review; sample 1 is reviewed and released.
+        assert rv.post("/api/results/batches/PB-1/review", json={}).json() == {"reviewed": 1}
+        assert rv.post(f"{SAMPLE_1}/release", json={}).json()["released"] == ["Fe"]
+
+
+def test_reject_and_correct_need_a_reason(app, lab):
+    with staff_api(app, "AN") as an, staff_api(app, "RV") as rv:
+        upload(an, csv())
+        assert rv.post(f"{SAMPLE_2}/analytes/Fe/reject", json={}).status_code == 422
+        assert rv.post(f"{SAMPLE_2}/analytes/Fe/reject", json={"note": "broken vial"}).json()["event"] == "rejected"
+        rv.post("/api/results/batches/PB-1/review", json={})
+        rv.post(f"{SAMPLE_1}/release", json={})
+        corrected = an.post(f"{SAMPLE_1}/analytes/Fe/correct", json={"note": "wrong dilution"})
+        assert corrected.status_code == 200 and corrected.json()["event"] == "correction_started"
+        assert an.post("/api/results/batches/PB-1/re-evaluate", json={}).json()["new_versions"] == 1
+
+
+def test_unknown_results_and_batches_are_404(app, lab):
+    with staff_api(app, "RV") as rv:
+        assert rv.post("/api/results/batches/PB-404/review", json={}).status_code == 404
+        assert rv.post("/api/results/samples/nonsense/analyses/5/release", json={}).status_code == 404
+        assert rv.post(f"{SAMPLE_1}/analytes/Fe/accept", json={"reason_category": "x"}).status_code == 404
+
+
+def test_decisions_are_staff_only(app, lab, customer_user):
+    with TestClient(app) as client:
+        login_api(client, "jane@acme.example")
+        assert client.post("/api/results/batches/PB-1/review", json={}).status_code == 403
+        assert client.post(f"{SAMPLE_1}/release", json={}).status_code == 403
+
+
+def test_batch_page_actions(app, lab):
+    with staff_api(app, "AN") as an:
+        upload(an, csv())
+        page = an.get("/results/batches/PB-1")
+        assert "Review every draft" in page.text and "Request a rerun" in page.text and "Release" in page.text
+        token = csrf_from(page.text)
+        refused = an.post("/results/batches/PB-1/review", data={"csrf_token": token})
+        assert "Nothing was reviewed" in refused.text and "needs REVIEWER" in refused.text
+    with staff_api(app, "RV") as rv:
+        token = csrf_from(rv.get("/results/batches/PB-1").text)
+        assert "Reviewed 2 result(s)" in rv.post("/results/batches/PB-1/review", data={"csrf_token": token}).text
+        released = rv.post("/results/batches/PB-1/release",
+                           data={"csrf_token": token, "sample": "TR00001-01", "analysis_id": TEN})
+        assert "Released TR00001-01: [&#39;Fe&#39;]" in released.text
+        rejected = rv.post("/results/batches/PB-1/act", data={
+            "csrf_token": token, "sample": "TR00001-02", "analysis_id": TEN, "analyte": "Fe",
+            "action": "reject", "note": "broken vial"})
+        assert "TR00001-02 Fe: rejected." in rejected.text
+        reevaluated = rv.post("/results/batches/PB-1/re-evaluate", data={"csrf_token": token})
+        assert "Re-evaluated: 0 new version(s)" in reevaluated.text

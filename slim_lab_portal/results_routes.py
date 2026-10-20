@@ -1,30 +1,50 @@
 """Staff pages and JSON API for analytical results (slim-data, D-70). Staff only.
 
     /results                      upload a result file (preview or import) and list prep batches
-    /results/batches/{code}       a batch's results as they stand
+    /results/batches/{code}       a batch's results as they stand, with the actions on them
     POST /api/results/imports     multipart `file`; `?preview=true` checks without writing
     GET  /api/results/batches[/{code}]
+    POST /api/results/batches/{code}/review | /re-evaluate
+    POST /api/results/samples/{sample}/analyses/{analysis_id}/analytes/{analyte}/{action}
+         action: accept | rerun | exception | reject | correct
+    POST /api/results/samples/{sample}/analyses/{analysis_id}/release
 
 An import is all or nothing: the file's readings, then an evaluation of every batch it touches,
-in one transaction. Errors: a refused file -> 422 with one entry per row error.
+and received TRs moved to in progress (D-71), in one transaction. A release changes results only.
+Errors: a refused file -> 422 with one entry per row error; an action the workflow or policy
+doesn't allow (role, four-eyes, state) -> 409; a missing reason -> 422; unknown batch/result -> 404.
 """
 
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from slim_data.persistence._rows import NotFound
 from slim_data.engine.ruleset import RulesetError
+from slim_data.domain.values import AnalyteRef, SampleRef
+from slim_data.domain.workflow import WorkflowError
+from slim_data.service import workflow as wf
 from slim_data.service.imports import ImportPlan, ImportRefused, preview_import
 from slim_data.service.views import batch_view, batches
 
-from slim_lab_portal.api import get_reference
+from slim_lab_portal.api import Service, get_reference
 from slim_lab_portal.auth import RequireStaff
 from slim_lab_portal.db import get_db
 from slim_lab_portal.reference import ReferenceData
-from slim_lab_portal.results import StaffDirectory, actor_for, import_and_evaluate, reference_lookup
+from slim_lab_portal.results import (
+    ResultAction,
+    StaffDirectory,
+    act_on_result,
+    actor_for,
+    import_and_evaluate,
+    reference_lookup,
+    start_work,
+)
+from slim_lab_portal.schemas import ReEvaluateIn, ResultActionIn, SignOffIn
+from slim_lab_portal.services import Conflict
 from slim_lab_portal.security import csrf_protect
 from slim_lab_portal.web import flash, render
 
@@ -56,19 +76,23 @@ def _plan_json(plan: ImportPlan) -> dict[str, Any]:
     }
 
 
-def _import(request, db, reference, user, content: bytes, filename: str):
+def _import(request, db, reference, service, user, content: bytes, filename: str):
     """(status, body): 201 with the receipt, or 422 with the reason; commits only on success."""
     lookup = _lookup(request, db, reference)
     try:
-        receipt, evaluations = import_and_evaluate(
+        receipt, evaluations, trs = import_and_evaluate(
             db, content, filename, actor_for(user), lookup, StaffDirectory(db)
         )
+        started = start_work(service, trs, user)
     except ImportRefused as refused:
         db.rollback()
         return 422, {"detail": "The file was not imported.", "plan": _plan_json(refused.plan)}
     except (NotFound, RulesetError) as error:  # e.g. no published ruleset for the batch's analysis
         db.rollback()
         return 422, {"detail": f"The file was not imported: {error}."}
+    except Conflict as error:  # a TR changed under us while starting work
+        db.rollback()
+        return 409, {"detail": f"The file was not imported: {error}."}
     db.commit()
     return 201, {
         "run_id": receipt.run_id,
@@ -81,7 +105,66 @@ def _import(request, db, reference, user, content: bytes, filename: str):
                    "released_affected": [str(k) for k in e.released_affected]}
             for code, e in evaluations.items()
         },
+        "started": started,
     }
+
+
+def _decide(db: Session, action) -> tuple[int, dict[str, Any]]:
+    """Runs one decision; (200, body) and commits, or (status, reason) and rolls back."""
+    try:
+        body = action()
+    except wf.BatchReviewRefused as error:
+        db.rollback()
+        return 409, {"detail": "Nothing was reviewed.", "problems": error.problems}
+    except wf.NothingReleased as error:
+        db.rollback()
+        return 409, {"detail": "Nothing was released.", "waiting": [f"{c}: {why}" for c, why in error.waiting]}
+    except WorkflowError as error:
+        db.rollback()
+        return 409, {"detail": str(error)}
+    except NotFound as error:
+        db.rollback()
+        return 404, {"detail": str(error)}
+    except ValidationError as error:  # e.g. an exception without a note
+        db.rollback()
+        return 422, {"detail": "; ".join(e["msg"].removeprefix("Value error, ") for e in error.errors())}
+    db.commit()
+    return 200, body
+
+
+def _result_key(sample: str, analysis_id: int, analyte: str) -> tuple[SampleRef, AnalyteRef]:
+    try:
+        return SampleRef.parse(sample), AnalyteRef(analysis_id=analysis_id, code=analyte)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"No result {sample} {analyte}.") from None
+
+
+def _review(db, user, code: str, data: SignOffIn):
+    return _decide(db, lambda: {"reviewed": wf.review_batch(db, code, actor_for(user), data.note, data.solo)})
+
+
+def _re_evaluate(request, db, reference, user, code: str, data: ReEvaluateIn):
+    def run():
+        receipt = wf.evaluate_batch(db, code, actor_for(user), _lookup(request, db, reference),
+                                    **({"reason": data.reason} if data.reason else {}))
+        return {"new_versions": len(receipt.new_versions), "unchanged": receipt.unchanged,
+                "released_affected": [str(k) for k in receipt.released_affected]}
+    return _decide(db, run)
+
+
+def _act(db, user, sample: SampleRef, analyte: AnalyteRef, action: ResultAction, data: ResultActionIn):
+    def run():
+        event = act_on_result(db, action, sample, analyte, actor_for(user), data.reason_category, data.note)
+        return {"result": f"{sample} {analyte.code}", "event": event.kind.name.lower(), "version": event.version}
+    return _decide(db, run)
+
+
+def _release(db, user, sample: SampleRef, analysis_id: int, data: SignOffIn):
+    def run():
+        released = wf.release(db, sample, analysis_id, actor_for(user), data.note, data.solo)
+        return {"sample": str(sample), "analysis_id": analysis_id, "released": list(released.released),
+                "waiting": [f"{c}: {why}" for c, why in released.waiting]}
+    return _decide(db, run)
 
 
 def _batch_rows(reference: ReferenceData, db: Session) -> list[dict[str, Any]]:
@@ -107,16 +190,18 @@ def results_upload(
     user: RequireStaff,
     db: DB,
     reference: Reference,
+    service: Service,
     file: Annotated[UploadFile, File()],
     action: Annotated[str, Form()] = "preview",
 ):
     content, filename = file.file.read(), file.filename or "upload.csv"  # already spooled by FastAPI
     if action == "import":
-        status, body = _import(request, db, reference, user, content, filename)
+        status, body = _import(request, db, reference, service, user, content, filename)
         if status == 201:
             evaluated = ", ".join(body["evaluated"]) or "none"
+            started = f" Started work on {', '.join(body['started'])}." if body["started"] else ""
             flash(request, f"Imported {filename}: {body['readings']} readings "
-                           f"({body['skipped']} already imported); batches evaluated: {evaluated}.")
+                           f"({body['skipped']} already imported); batches evaluated: {evaluated}.{started}")
             return RedirectResponse(request.url_for("results_home").path, status_code=303)
         context = {"batches": _batch_rows(reference, db), "error": body["detail"], "plan": body.get("plan")}
         return render(request, "results/index.html", context, 422)
@@ -131,7 +216,59 @@ def results_batch(request: Request, code: str, user: RequireStaff, db: DB, refer
         view = batch_view(db, code)
     except NotFound:
         return render(request, "error.html", {"status": 404, "message": f"Prep batch {code} not found."}, 404)
-    return render(request, "results/batch.html", {"view": view, "reference": reference})
+    release_groups = sorted({(r.sample, r.analyte.analysis_id) for r in view.results
+                             if r.status.name not in ("RELEASED", "REJECTED")},
+                            key=lambda k: (k[0].tr_number, k[0].position, k[1]))
+    return render(request, "results/batch.html", {
+        "view": view, "reference": reference, "release_groups": release_groups, "actions": ResultAction,
+    })
+
+
+def _back(request: Request, code: str, outcome: tuple[int, dict[str, Any]], done: str) -> RedirectResponse:
+    status, body = outcome
+    if status == 200:
+        flash(request, done.format(**body))
+    else:
+        details = body.get("problems") or body.get("waiting") or []
+        flash(request, " ".join([str(body["detail"]), *details]), "error")
+    return RedirectResponse(request.url_for("results_batch", code=code).path, status_code=303)
+
+
+@router.post("/results/batches/{code}/review", name="results_review")
+def results_review(request: Request, code: str, user: RequireStaff, db: DB,
+                   note: Annotated[str, Form(max_length=2000)] = "", solo: Annotated[bool, Form()] = False):
+    outcome = _review(db, user, code, SignOffIn(note=note, solo=solo))
+    return _back(request, code, outcome, "Reviewed {reviewed} result(s).")
+
+
+@router.post("/results/batches/{code}/re-evaluate", name="results_re_evaluate")
+def results_re_evaluate(request: Request, code: str, user: RequireStaff, db: DB, reference: Reference,
+                        reason: Annotated[str, Form(max_length=500)] = ""):
+    outcome = _re_evaluate(request, db, reference, user, code, ReEvaluateIn(reason=reason))
+    return _back(request, code, outcome, "Re-evaluated: {new_versions} new version(s), {unchanged} unchanged.")
+
+
+@router.post("/results/batches/{code}/act", name="results_act")
+def results_act(
+    request: Request, code: str, user: RequireStaff, db: DB,
+    sample: Annotated[str, Form()], analysis_id: Annotated[int, Form()], analyte: Annotated[str, Form()],
+    action: Annotated[ResultAction, Form()],
+    reason_category: Annotated[str, Form(max_length=100)] = "", note: Annotated[str, Form(max_length=2000)] = "",
+):
+    sample_ref, analyte_ref = _result_key(sample, analysis_id, analyte)
+    data = ResultActionIn(reason_category=reason_category, note=note)
+    return _back(request, code, _act(db, user, sample_ref, analyte_ref, action, data), "{result}: {event}.")
+
+
+@router.post("/results/batches/{code}/release", name="results_release")
+def results_release(
+    request: Request, code: str, user: RequireStaff, db: DB,
+    sample: Annotated[str, Form()], analysis_id: Annotated[int, Form()],
+    note: Annotated[str, Form(max_length=2000)] = "", solo: Annotated[bool, Form()] = False,
+):
+    sample_ref, _ = _result_key(sample, analysis_id, "X")
+    outcome = _release(db, user, sample_ref, analysis_id, SignOffIn(note=note, solo=solo))
+    return _back(request, code, outcome, "Released {sample}: {released}.")
 
 
 # ---------------------------------------------------------------- JSON API
@@ -142,6 +279,7 @@ def api_import(
     user: RequireStaff,
     db: DB,
     reference: Reference,
+    service: Service,
     file: Annotated[UploadFile, File()],
     preview: bool = False,
 ):
@@ -151,7 +289,7 @@ def api_import(
                               StaffDirectory(db))
         db.rollback()
         return _plan_json(plan)
-    status, body = _import(request, db, reference, user, content, filename)
+    status, body = _import(request, db, reference, service, user, content, filename)
     return JSONResponse(body, status_code=status)
 
 
@@ -166,3 +304,33 @@ def api_batch(code: str, user: RequireStaff, db: DB):
         return batch_view(db, code).model_dump(mode="json")
     except NotFound:
         raise HTTPException(status_code=404, detail=f"Prep batch {code} not found.") from None
+
+
+@api_router.post("/batches/{code}/review", summary="Review every draft of a batch (or none)")
+def api_review(request: Request, code: str, data: SignOffIn, user: RequireStaff, db: DB):
+    status, body = _review(db, user, code, data)
+    return JSONResponse(body, status_code=status)
+
+
+@api_router.post("/batches/{code}/re-evaluate", summary="Evaluate a batch again (new versions only where changed)")
+def api_re_evaluate(request: Request, code: str, data: ReEvaluateIn, user: RequireStaff, db: DB,
+                    reference: Reference):
+    status, body = _re_evaluate(request, db, reference, user, code, data)
+    return JSONResponse(body, status_code=status)
+
+
+@api_router.post("/samples/{sample}/analyses/{analysis_id}/analytes/{analyte}/{action}",
+                 summary="Accept, rerun, exception, reject or correct one result")
+def api_act(sample: str, analysis_id: int, analyte: str, action: ResultAction, data: ResultActionIn,
+            user: RequireStaff, db: DB):
+    sample_ref, analyte_ref = _result_key(sample, analysis_id, analyte)
+    status, body = _act(db, user, sample_ref, analyte_ref, action, data)
+    return JSONResponse(body, status_code=status)
+
+
+@api_router.post("/samples/{sample}/analyses/{analysis_id}/release",
+                 summary="Release the ready results of a sample + analysis; the rest wait")
+def api_release(sample: str, analysis_id: int, data: SignOffIn, user: RequireStaff, db: DB):
+    sample_ref, _ = _result_key(sample, analysis_id, "X")
+    status, body = _release(db, user, sample_ref, analysis_id, data)
+    return JSONResponse(body, status_code=status)
