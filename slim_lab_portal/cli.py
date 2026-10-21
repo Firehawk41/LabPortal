@@ -5,6 +5,7 @@
     python -m slim_lab_portal.cli create-customer-user --email jane@acme.example --customer-id 3
     python -m slim_lab_portal.cli sync-analysis-catalog
     python -m slim_lab_portal.cli sync-personas        # demo sandbox only (DEMO_PERSONAS)
+    python -m slim_lab_portal.cli verify               # replay every result + check the audit chain
 
 The password comes from the PORTAL_PASSWORD environment variable, or an interactive prompt.
 """
@@ -16,6 +17,7 @@ import sys
 
 from sqlalchemy import select
 
+from slim_lab_portal.audit import chain_check, install_audit_log
 from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
@@ -77,7 +79,8 @@ def _sync_personas() -> int:
 
 
 def _migrate() -> int:
-    """The portal's migrations, then slim-data's (its own tables and version table)."""
+    """The portal's migrations, then slim-data's (its own tables and version table), then the audit
+    log over every table on Postgres (slim-data D-77)."""
     from pathlib import Path
 
     from alembic import command
@@ -89,9 +92,32 @@ def _migrate() -> int:
     config = Config(str(Path(slim_lab_portal.__file__).parent / "alembic.ini"))
     config.attributes["database_url"] = settings.database_url
     command.upgrade(config, "head")
-    migrate_slim_data(make_engine(settings.database_url))
-    print("Portal and slim-data migrations applied.")
+    engine = make_engine(settings.database_url)
+    migrate_slim_data(engine)
+    audited = install_audit_log(engine)
+    print("Portal and slim-data migrations applied."
+          + (f" Audit log on {len(audited)} tables." if audited else " No audit log (not Postgres, or no SLIM tables yet)."))
     return 0
+
+
+def _verify() -> int:
+    """slim-data's verify (D-76): exit 1 if a result doesn't replay or the audit chain is broken."""
+    from slim_data.service.verify import verify
+
+    engine = make_engine(load_settings().database_url)
+    with make_session_factory(engine)() as session:
+        report = verify(session, chain_check(engine))
+    print(f"Replayed {report.versions} result versions: "
+          + ("all match." if not report.mismatches else f"{len(report.mismatches)} don't match:"))
+    for mismatch in report.mismatches:
+        print(f"  {mismatch}")
+    if not report.chain_checked:
+        print("Audit chain: not checked (no audit log on this database).")
+    elif report.broken_entries:
+        print(f"Audit chain: BROKEN, entries {', '.join(map(str, report.broken_entries))}.")
+    else:
+        print("Audit chain: intact.")
+    return 0 if report.ok else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("sync-analysis-catalog", help="Refill analysis_catalog from data/analysis_catalog.csv")
     sub.add_parser("migrate", help="Apply the portal's and slim-data's database migrations")
     sub.add_parser("sync-personas", help="Create/update the demo personas from data/demo_personas.csv")
+    sub.add_parser("verify", help="Replay every stored result and check the audit chain (slim-data D-76)")
 
     args = parser.parse_args(argv)
     if args.command == "sync-analysis-catalog":
@@ -118,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         return _migrate()
     if args.command == "sync-personas":
         return _sync_personas()
+    if args.command == "verify":
+        return _verify()
     if args.command == "create-staff":
         lab_role = next(k for k, v in LAB_ROLES.items() if v.lower() == args.lab_role)
         _create_user(args.email, ROLE_STAFF, initials=args.initials.strip().upper(), customer_id=None,

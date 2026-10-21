@@ -2,17 +2,23 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from infrastructure import audit as slim_audit
+from slim_domain.domain.report_log.report_log_repository import _ReportGenerationLogRow
+from slim_data.service.verify import verify
+from sqlalchemy import text
 from slim_data.persistence import migrate
 from slim_data.persistence.results import issues_for_tr
 from slim_data.service.views import batch_view, report_view
 
+from slim_lab_portal import cli
+from slim_lab_portal.audit import chain_check, install_audit_log
 from slim_lab_portal.demo_scenarios import seed_scenarios
 from slim_lab_portal.domain import RequestType, TRStatus
 from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.reference import AnalysisRef, ChemicalRef, CustomerRef, ElementRef, StaticReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
 from slim_lab_portal.results import document_sha256, publish_demo_rules, report_document
-from tests.conftest import make_settings
+from tests.conftest import make_settings, postgres_only
 
 ELEMENTS = {26: "Fe", 29: "Cu", 30: "Zn", 28: "Ni", 24: "Cr", 25: "Mn"}
 SPECS = {(2, 2, ""): {"Zn": 0.2}}  # customer B, Chemical 01, as in the OSS demo data
@@ -86,3 +92,50 @@ def test_a_visitor_sees_the_history(engine, reference, seeded):
         assert "PB-00009" in client.get("/results").text
         report = client.get(f"/results/reports/{seeded['amended']}").text
         assert "Amended" in report and "(amends" in report
+
+
+def test_every_scenario_replays_and_cli_verify_says_so(engine, seeded, monkeypatch, capsys):
+    monkeypatch.setenv("DATABASE_URL", engine.url.render_as_string(hide_password=False))
+    assert cli.main(["verify"]) == 0
+    out = capsys.readouterr().out
+    assert "result versions: all match." in out
+    if engine.dialect.name == "sqlite":
+        assert install_audit_log(engine) == [] and chain_check(engine) is None
+        assert "Audit chain: not checked" in out
+
+
+def _remove_audit_log(engine):
+    with engine.begin() as connection:
+        for table in slim_audit.audited_tables(connection):
+            connection.execute(text(f'DROP TRIGGER IF EXISTS zz_audit ON "{table}"'))
+            connection.execute(text(f'DROP TRIGGER IF EXISTS zz_audit_truncate ON "{table}"'))
+        for table in slim_audit.LOG_TABLES:
+            connection.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+
+
+@pytest.fixture
+def audited(engine, db):
+    """slim-domain's audit log over every table, removed afterwards so other tests' tables stay plain.
+    It needs SLIM's report log, which the demo seed's SLIM data brings; here the test creates it."""
+    _remove_audit_log(engine)  # left by an interrupted run
+    assert install_audit_log(engine) == []  # no SLIM tables yet: nothing installed
+    _ReportGenerationLogRow.__table__.create(engine)
+    yield install_audit_log(engine)
+    db.rollback()  # end the test's transaction: dropping triggers waits for its locks
+    _remove_audit_log(engine)
+
+
+@postgres_only
+def test_on_postgres_the_scenarios_are_chained_and_verify_checks_the_chain(engine, db, reference, audited):
+    with engine.begin() as connection:  # slim-data's tables again, then the log over them too (D-77)
+        migrate.downgrade(connection)
+        migrate.upgrade(connection)
+    install_audit_log(engine)
+    publish_demo_rules(db, reference)
+    sync_personas(db)
+    seed_scenarios(db, reference, specs)
+    db.commit()
+    assert {"tr_submissions", "users"} <= set(audited)
+    logged = db.execute(text("SELECT count(*) FROM audit_log WHERE table_name = 'result_versions'")).scalar()
+    report = verify(db, chain_check(engine))
+    assert logged and report.chain_checked and report.ok and report.broken_entries == ()
