@@ -56,6 +56,18 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 9. ✅ Link-ready (portal only): shared-Postgres `docker-compose.yml` with a seed step; slim-lims bearer
    token (`LIMS_API_TOKEN`, `auth.ServiceClient`, `ActorType.SYSTEM`, limited to list/get/status and to
    in progress / partial / complete report); contract in spec §12 + `tests/test_lims_contract.py`.
+10. ✅ slim-data (results module) wiring — slim-data's M6 part 2, decisions in slim-data-oss
+   `docs/DECISIONS.md` D-70, three slices. Slice 1 ✅: `results.py` (ReferenceLookup / StaffDirectory over
+   portal + SLIM tables, actor_for, demo ruleset bound to `10_elements_icpms` by code), `results_routes.py`
+   (/results upload preview/import → evaluate, batch page, /api/results), staff `lab_role` (supervisor sets
+   roles), `cli migrate`. Slice 2 ✅: batch page + API actions (review batch, accept, rerun, exception,
+   reject, correct, re-evaluate, release per sample + analysis; 409 when role / four-eyes / state refuse);
+   first readings move a received TR to in progress (D-71; a release never moves the TR); reason categories
+   from the policy's list (D-72). Slice 3: /results/reports/{tr} + "Issue report" ✅ (D-73: sha256 of the
+   canonical report JSON until the report engine is wired; TR → partial / complete report). Personas ✅
+   (D-74: `personas.py`, `users.is_persona`, `DEMO_PERSONAS`, /demo/personas; ASSERTED; no user admin).
+   Demo scenarios ✅ (D-75: `demo_scenarios.py` is slim-data's DemoHost; the seed runs the nine scenarios
+   once on real TRs). Next: walkthrough with the user.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
@@ -68,8 +80,8 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env                     # DATABASE_URL defaults to sqlite:///slim_lab_portal.db
 pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss   # OSS repos, for the demo seed
-python scripts/seed_demo.py              # migrations + OSS demo SLIM data + analysis_catalog
-PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM
+python scripts/seed_demo.py              # migrations (portal + slim-data) + OSS demo SLIM data + catalog + demo ruleset
+PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM --lab-role supervisor
 uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:8000, API docs at /api/docs
 pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
 ```
@@ -97,16 +109,20 @@ slim_lab_portal/
 ├── catalog.py       # sync_analysis_catalog: data/analysis_catalog.csv -> analysis_catalog, matched by SLIM name
 ├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
 ├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
+├── results.py       # slim-data host side: TrSampleTables, SpecReader, StaffDirectory, actor_for, demo rules
+├── results_routes.py  # /results (upload, batches, reports) and /api/results — staff only
+├── personas.py      # demo personas (DEMO_PERSONAS): data/demo_personas.csv -> users.is_persona rows
+├── demo_scenarios.py  # slim-data's demo scenarios on real TRs (PortalDemoHost, seed_scenarios); demo seed only
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
-├── cli.py           # create-staff, create-customer-user, sync-analysis-catalog
+├── cli.py           # migrate (portal + slim-data), create-staff, create-customer-user, sync-analysis-catalog, sync-personas
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
 └── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js
-scripts/seed_demo.py # Demo DB only: runs slim-report-engine-oss demo seed() if SLIM tables are empty, syncs catalog
+scripts/seed_demo.py # Demo DB only: SLIM demo data if empty, catalog, slim-data rules, personas, demo scenarios
 tests/               # pytest; SQLite per test, or Postgres via TEST_DATABASE_URL; factories.py builds domain objects
 docs/SLIM_DOMAIN_V2.md
 ```
@@ -120,9 +136,15 @@ docs/SLIM_DOMAIN_V2.md
   never create/alter them. No FKs from portal tables into SLIM tables.
 - **Portable schema:** must run on SQLite and Postgres (as slim-domain does) — no ARRAY columns,
   enums stored as ints. Portal-owned TR tables use integer keys; `users` uses UUIDs.
+- **slim-data:** a required library (git dependency). Its tables share the database, migrated by its own
+  Alembic (`alembic_version_slim_data`; `cli migrate` / seed run both). It flushes; routes commit. Staff
+  act as `results.actor_for(user)` (UUID id, initials, `lab_role`); result files name the analyst by
+  initials (unique). SQLite engines use the explicit-BEGIN recipe so its savepoints work.
 - **Auth:** Starlette signed-cookie sessions (`SameSite=Lax`, `Secure` in production), bcrypt.
   Roles: `customer` (must have `customer_id`, a SLIM customer ID) and `staff` (must have
-  `initials`). No self-registration; staff create users. Customers must already exist in SLIM.
+  `initials` and a `lab_role`: analyst / reviewer / supervisor). No self-registration; staff create users. Customers must already exist in SLIM.
+  Demo personas (`is_persona`, only with `DEMO_PERSONAS`) are chosen, not logged in: ASSERTED in slim-data,
+  refused by /login, no user or role admin.
 - **Machine access:** slim-lims uses `Authorization: Bearer $LIMS_API_TOKEN` (spec §12). Token
   requests skip CSRF and never use the session; only `auth.LIMS_ROUTES` are allowed. Keep
   `tests/test_lims_contract.py` passing — slim-lims is written against it.

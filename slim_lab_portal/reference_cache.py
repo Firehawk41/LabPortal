@@ -187,3 +187,6 @@ class ReferenceCache:
 
     def analyses_for(self, request_type: RequestType) -> list[AnalysisRef]:
         return self.snapshot().analyses_for(request_type)
+
+    def catalog_analyses(self) -> list[AnalysisRef]:
+        return self.snapshot().catalog_analyses()

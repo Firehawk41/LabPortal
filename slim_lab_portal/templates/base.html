@@ -23,10 +23,14 @@
             {% if current_user.is_staff %}
               <a href="{{ url_for('admin_home') }}">Requests</a>
               <a href="{{ url_for('new_request') }}">New request</a>
+              <a href="{{ url_for('results_home') }}">Results</a>
               <a href="{{ url_for('admin_users') }}">Users</a>
             {% else %}
               <a href="{{ url_for('index') }}">My requests</a>
               <a href="{{ url_for('new_request') }}">New request</a>
+            {% endif %}
+            {% if request.app.state.settings.demo_personas %}
+              <a href="{{ url_for('demo_personas') }}">Switch persona</a>
             {% endif %}
             <form method="post" action="{{ url_for('logout') }}" class="nav-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
@@ -41,6 +45,10 @@
   </header>
 
   <main class="page">
+    {% if current_user and current_user.is_persona %}
+      <div class="flash flash--info" role="status">Demo sandbox, fictional data: you are acting as
+        {{ current_user.initials or current_user.email }} (asserted, not logged in).</div>
+    {% endif %}
     {% for category, message in flashes %}
       <div class="flash flash--{{ category }}" role="status">{{ message }}</div>
     {% endfor %}

@@ -1,8 +1,10 @@
 """Command-line admin tasks.
 
-    python -m slim_lab_portal.cli create-staff --email lab@example.com --initials JM
+    python -m slim_lab_portal.cli migrate
+    python -m slim_lab_portal.cli create-staff --email lab@example.com --initials JM --lab-role supervisor
     python -m slim_lab_portal.cli create-customer-user --email jane@acme.example --customer-id 3
     python -m slim_lab_portal.cli sync-analysis-catalog
+    python -m slim_lab_portal.cli sync-personas        # demo sandbox only (DEMO_PERSONAS)
 
 The password comes from the PORTAL_PASSWORD environment variable, or an interactive prompt.
 """
@@ -17,7 +19,9 @@ from sqlalchemy import select
 from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
-from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.models import LAB_ROLES, ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.personas import sync_personas
+from slim_lab_portal.results import migrate_slim_data
 from slim_lab_portal.security import hash_password
 
 
@@ -28,19 +32,24 @@ def _password() -> str:
     return password
 
 
-def _create_user(email: str, role: str, *, initials: str | None, customer_id: int | None) -> None:
+def _create_user(
+    email: str, role: str, *, initials: str | None, customer_id: int | None, lab_role: int | None = None
+) -> None:
     settings = load_settings()
     session_factory = make_session_factory(make_engine(settings.database_url))
     email = email.strip().lower()
     with session_factory() as db:
         if db.scalars(select(User).where(User.email == email)).first():
             raise SystemExit(f"A user with email {email} already exists.")
+        if initials and db.scalars(select(User).where(User.initials == initials)).first():
+            raise SystemExit(f"Initials {initials} are taken: they identify the analyst in result files.")
         db.add(User(
             email=email,
             password_hash=hash_password(_password()),
             role=role,
             initials=initials,
             customer_id=customer_id,
+            lab_role=lab_role,
         ))
         db.commit()
     print(f"Created {role} user {email}.")
@@ -58,6 +67,33 @@ def _sync_catalog() -> int:
     return 0
 
 
+def _sync_personas() -> int:
+    settings = load_settings()
+    with make_session_factory(make_engine(settings.database_url))() as db:
+        count = sync_personas(db)
+        db.commit()
+    print(f"{count} demo personas in place (offered only when DEMO_PERSONAS is on).")
+    return 0
+
+
+def _migrate() -> int:
+    """The portal's migrations, then slim-data's (its own tables and version table)."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    import slim_lab_portal
+
+    settings = load_settings()
+    config = Config(str(Path(slim_lab_portal.__file__).parent / "alembic.ini"))
+    config.attributes["database_url"] = settings.database_url
+    command.upgrade(config, "head")
+    migrate_slim_data(make_engine(settings.database_url))
+    print("Portal and slim-data migrations applied.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="slim_lab_portal.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -65,18 +101,27 @@ def main(argv: list[str] | None = None) -> int:
     staff = sub.add_parser("create-staff", help="Create a lab staff (admin) user")
     staff.add_argument("--email", required=True)
     staff.add_argument("--initials", required=True)
+    staff.add_argument("--lab-role", choices=[r.lower() for r in LAB_ROLES.values()], default="analyst")
 
     customer = sub.add_parser("create-customer-user", help="Create a user for an existing SLIM customer")
     customer.add_argument("--email", required=True)
     customer.add_argument("--customer-id", required=True, type=int)
 
     sub.add_parser("sync-analysis-catalog", help="Refill analysis_catalog from data/analysis_catalog.csv")
+    sub.add_parser("migrate", help="Apply the portal's and slim-data's database migrations")
+    sub.add_parser("sync-personas", help="Create/update the demo personas from data/demo_personas.csv")
 
     args = parser.parse_args(argv)
     if args.command == "sync-analysis-catalog":
         return _sync_catalog()
+    if args.command == "migrate":
+        return _migrate()
+    if args.command == "sync-personas":
+        return _sync_personas()
     if args.command == "create-staff":
-        _create_user(args.email, ROLE_STAFF, initials=args.initials.strip().upper(), customer_id=None)
+        lab_role = next(k for k, v in LAB_ROLES.items() if v.lower() == args.lab_role)
+        _create_user(args.email, ROLE_STAFF, initials=args.initials.strip().upper(), customer_id=None,
+                     lab_role=lab_role)
     else:
         _create_user(args.email, ROLE_CUSTOMER, initials=None, customer_id=args.customer_id)
     return 0

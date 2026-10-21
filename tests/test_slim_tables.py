@@ -11,12 +11,14 @@ analysis_repo = pytest.importorskip("slim_domain.domain.analysis.analysis_reposi
 from slim_domain.domain.chemical.chemical_repository import _ChemicalRow  # noqa: E402
 from slim_domain.domain.customer.customer_repository import _CustomerRow  # noqa: E402
 from slim_domain.domain.element.element_repository import _ElementRow  # noqa: E402
+from slim_domain.domain.specification.specification_repository import _SpecificationRow  # noqa: E402
 
 SLIM_TABLES = {
     "customers": _CustomerRow.__table__,
     "chemicals": _ChemicalRow.__table__,
     "elements": _ElementRow.__table__,
     "analyses": analysis_repo._AnalysisRow.__table__,
+    "specifications": _SpecificationRow.__table__,
 }
 
 

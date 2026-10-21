@@ -6,7 +6,12 @@
 {% block content %}
   <div class="page-head">
     <h1>{{ s.tr_number }} {{ badge(s.status) }} {% if s.is_rush %}<span class="badge badge--rush">RUSH</span>{% endif %}</h1>
-    <a class="muted" href="{{ url_for('get_submission', tr_number=s.tr_number) }}">View as JSON</a>
+    <span>
+      {% if current_user.is_staff and s.status not in (TRStatus.SUBMITTED, TRStatus.CANCELLED) %}
+        <a href="{{ url_for('results_report', tr_number=s.tr_number) }}">Results report</a> ·
+      {% endif %}
+      <a class="muted" href="{{ url_for('get_submission', tr_number=s.tr_number) }}">View as JSON</a>
+    </span>
   </div>
 
   <section class="form-section">

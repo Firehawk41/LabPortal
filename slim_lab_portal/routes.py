@@ -15,7 +15,7 @@ from slim_lab_portal.api import Service, get_reference
 from slim_lab_portal.auth import CurrentUser, RequireStaff, RequireUser
 from slim_lab_portal.db import get_db
 from slim_lab_portal.domain import ActorType, RequestType, TRStatus, TRSubmission, allowed_next_statuses
-from slim_lab_portal.models import ROLE_CUSTOMER, ROLE_STAFF, User
+from slim_lab_portal.models import LAB_ROLE_ANALYST, LAB_ROLE_SUPERVISOR, LAB_ROLES, ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.schemas import CheckInIn, ChemicalMatchIn, StatusChangeIn
 from slim_lab_portal.security import csrf_protect, hash_password
@@ -248,7 +248,7 @@ def refresh_reference(request: Request, user: RequireStaff):
 def admin_users(request: Request, user: RequireStaff, db: DB, reference: Reference):
     users = db.scalars(select(User).order_by(User.role.desc(), User.email)).all()
     customers = {c.id: c.name for c in reference.customer_choices()}
-    return render(request, "admin/users.html", {"users": users, "customers": customers})
+    return render(request, "admin/users.html", {"users": users, "customers": customers, "lab_roles": LAB_ROLES})
 
 
 @router.post("/admin/users", name="create_user")
@@ -262,18 +262,29 @@ def create_user(
     password: Annotated[str, Form()],
     initials: Annotated[str, Form()] = "",
     customer_id: Annotated[str, Form()] = "",
+    lab_role: Annotated[str, Form()] = "",
 ):
     email = email.strip().lower()
+    initials = initials.strip().upper()
     error = None
     cid = _int_or_none(customer_id)
-    if role not in (ROLE_CUSTOMER, ROLE_STAFF):
+    role_id = _int_or_none(lab_role) or LAB_ROLE_ANALYST
+    if user.is_persona:
+        error = "Demo personas can't manage users."
+    elif role not in (ROLE_CUSTOMER, ROLE_STAFF):
         error = "Choose a role."
     elif "@" not in email:
         error = "Enter a valid email address."
     elif len(password) < 12:
         error = "Passwords must be at least 12 characters."
-    elif role == ROLE_STAFF and not initials.strip():
+    elif role == ROLE_STAFF and not initials:
         error = "Staff users need initials."
+    elif role == ROLE_STAFF and role_id not in LAB_ROLES:
+        error = "Choose a lab role."
+    elif role == ROLE_STAFF and role_id != LAB_ROLE_ANALYST and user.lab_role != LAB_ROLE_SUPERVISOR:
+        error = "Only a supervisor can give a lab role above analyst."
+    elif role == ROLE_STAFF and db.scalars(select(User).where(User.initials == initials)).first():
+        error = f"Initials {initials} are taken: they identify the analyst in result files."
     elif role == ROLE_CUSTOMER and (cid is None or reference.customer(cid) is None):
         error = "Choose the customer (it must already exist in SLIM)."
     elif db.scalars(select(User).where(User.email == email)).first():
@@ -288,7 +299,8 @@ def create_user(
         return _redirect(request, "admin_users")
     db.add(User(
         email=email, password_hash=password_hash, role=role,
-        initials=initials.strip().upper() if role == ROLE_STAFF else None,
+        initials=initials if role == ROLE_STAFF else None,
+        lab_role=role_id if role == ROLE_STAFF else None,
         customer_id=cid if role == ROLE_CUSTOMER else None,
     ))
     db.commit()
@@ -302,7 +314,9 @@ def toggle_user_active(request: Request, user_id: str, user: RequireStaff, db: D
         target = db.get(User, uuid.UUID(user_id))
     except ValueError:
         target = None
-    if target is None:
+    if user.is_persona:
+        flash(request, "Demo personas can't manage users.", "error")
+    elif target is None:
         flash(request, "User not found.", "error")
     elif target.id == user.id:
         flash(request, "You cannot deactivate yourself.", "error")
@@ -310,6 +324,30 @@ def toggle_user_active(request: Request, user_id: str, user: RequireStaff, db: D
         target.is_active = not target.is_active
         db.commit()
         flash(request, f"{target.email} is now {'active' if target.is_active else 'deactivated'}.")
+    return _redirect(request, "admin_users")
+
+
+@router.post("/admin/users/{user_id}/lab-role", name="set_lab_role")
+def set_lab_role(request: Request, user_id: str, user: RequireStaff, db: DB, lab_role: Annotated[int, Form()]):
+    """Supervisors only: lab roles decide who may review, accept and release results (D-70)."""
+    try:
+        target = db.get(User, uuid.UUID(user_id))
+    except ValueError:
+        target = None
+    if user.is_persona:
+        flash(request, "Demo personas can't change lab roles.", "error")
+    elif user.lab_role != LAB_ROLE_SUPERVISOR:
+        flash(request, "Only a supervisor can change lab roles.", "error")
+    elif target is None or not target.is_staff:
+        flash(request, "Staff user not found.", "error")
+    elif lab_role not in LAB_ROLES:
+        flash(request, "Choose a lab role.", "error")
+    elif target.id == user.id:
+        flash(request, "You cannot change your own lab role.", "error")
+    else:
+        target.lab_role = lab_role
+        db.commit()
+        flash(request, f"{target.email} is now {LAB_ROLES[lab_role].lower()}.")
     return _redirect(request, "admin_users")
 
 
@@ -321,4 +359,5 @@ def api_me(user: RequireUser):
         "role": user.role,
         "customer_id": user.customer_id,
         "initials": user.initials,
+        "lab_role": getattr(user, "lab_role", None),
     }

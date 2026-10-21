@@ -71,3 +71,24 @@ class StatusChangeIn(_Input):
     note: Annotated[Text, StringConstraints(max_length=2000)] = ""
     date_received: date | None = None  # receiving only
     received_by: Annotated[Text, StringConstraints(max_length=10)] | None = None  # defaults to the staff user's initials
+
+
+# ---------------------------------------------------------------- results (slim-data, D-70)
+
+class SignOffIn(_Input):
+    """Reviewing a batch or releasing a sample + analysis. `solo`: a chemist alone signing off their
+    own results after the policy's delay, with `note` as the reason (slim-data D-68)."""
+    note: Annotated[Text, StringConstraints(max_length=2000)] = ""
+    solo: bool = False
+
+
+class ResultActionIn(_Input):
+    """Accept, rerun, exception, reject or correct one result. Accept and exception need a reason
+    category (printed on the report as a standard qualifier, D-11); exception, reject and correct
+    need a note (the reason)."""
+    reason_category: Annotated[Text, StringConstraints(max_length=100)] = ""
+    note: Annotated[Text, StringConstraints(max_length=2000)] = ""
+
+
+class ReEvaluateIn(_Input):
+    reason: Annotated[Text, StringConstraints(max_length=500)] = ""

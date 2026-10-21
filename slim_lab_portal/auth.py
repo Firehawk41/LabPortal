@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from slim_lab_portal.db import get_db
 from slim_lab_portal.models import User
+from slim_lab_portal.personas import persona_choices
 from slim_lab_portal.security import csrf_protect, verify_password
 from slim_lab_portal.web import render
 
@@ -46,6 +47,7 @@ class ServiceClient:
     name: str
     is_staff: bool = True
     is_service: bool = True
+    is_persona: bool = False
     is_active: bool = True
     customer_id: None = None
     initials: None = None
@@ -131,6 +133,8 @@ def login(
     next: Annotated[str, Form()] = "/",
 ):
     user = db.scalars(select(User).where(User.email == email.strip().lower())).first()
+    if user is not None and user.is_persona:
+        user = None  # personas are chosen on /demo/personas, never signed in with a password
     ok = verify_password(password, user.password_hash if user else None)
     if not ok or user is None or not user.is_active:
         return render(
@@ -143,6 +147,29 @@ def login(
     request.session.clear()
     request.session[SESSION_USER_KEY] = str(user.id)
     return RedirectResponse(_safe_next(next), status_code=303)
+
+
+@router.get("/demo/personas", name="demo_personas")
+def demo_personas_page(request: Request, db: Annotated[Session, Depends(get_db)], user: CurrentUser):
+    """Continue as a demo persona (DEMO_PERSONAS only): who you are is your claim, recorded as ASSERTED."""
+    if not request.app.state.settings.demo_personas:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return render(request, "demo_personas.html", {"personas": persona_choices(db)})
+
+
+@router.post("/demo/continue-as", name="continue_as")
+def continue_as(request: Request, db: Annotated[Session, Depends(get_db)], user_id: Annotated[str, Form()]):
+    if not request.app.state.settings.demo_personas:
+        raise HTTPException(status_code=404, detail="Not Found")
+    try:
+        persona = db.get(User, uuid.UUID(user_id))
+    except ValueError:
+        persona = None
+    if persona is None or not persona.is_persona or not persona.is_active:
+        raise HTTPException(status_code=404, detail="No such persona.")
+    request.session.clear()  # like a login: new session, new CSRF token
+    request.session[SESSION_USER_KEY] = str(persona.id)
+    return RedirectResponse("/", status_code=303)
 
 
 @router.post("/logout", name="logout")
