@@ -49,6 +49,8 @@ services:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/slim
       # slim-lims's API token (docs/SLIM_DOMAIN_V2.md §12); empty = no machine access.
       LIMS_API_TOKEN: ${LIMS_API_TOKEN:-}
+      # Demo personas ("Continue as...", /demo/personas); DEMO_PERSONAS=false to sign in with passwords only.
+      DEMO_PERSONAS: ${DEMO_PERSONAS:-true}
     depends_on:
       seed:
         condition: service_completed_successfully
