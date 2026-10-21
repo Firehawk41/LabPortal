@@ -22,12 +22,14 @@ dependencies = [
     "tzdata",  # zoneinfo data for LAB_TIMEZONE on slim container images
     # Analytical results module (D-70). Not on PyPI; co-developing: pip install -e ../slim-data-oss
     "slim-data @ git+https://github.com/Firehawk41/slim-data-oss@main",
+    # slim-domain: its hash-chained audit log over the shared database (slim-data D-77), and the bridge.
+    "slim-domain @ git+https://github.com/Firehawk41/slim-domain-oss@main",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
-# The demo seed (scripts/seed_demo.py) also needs the OSS SLIM packages, installed from local
-# checkouts: pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss
+# The demo seed (scripts/seed_demo.py) also needs slim-report-engine-oss, installed from a local
+# checkout: pip install -e ../slim-report-engine-oss
 
 [tool.setuptools.packages.find]
 include = ["slim_lab_portal*"]

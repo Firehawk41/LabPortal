@@ -67,7 +67,10 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    canonical report JSON until the report engine is wired; TR → partial / complete report). Personas ✅
    (D-74: `personas.py`, `users.is_persona`, `DEMO_PERSONAS`, /demo/personas; ASSERTED; no user admin).
    Demo scenarios ✅ (D-75: `demo_scenarios.py` is slim-data's DemoHost; the seed runs the nine scenarios
-   once on real TRs). Next: walkthrough with the user.
+   once on real TRs). Walkthrough ✅.
+11. slim-data M7: `audit.py` installs slim-domain's hash-chained audit log over every table on Postgres
+   (`cli migrate` and the seed, once SLIM's tables exist; slim-data D-77; slim-domain is now required);
+   `cli verify` runs slim-data's `verify` with slim-domain's `verify_chain` (D-76), exit 1 on a problem.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
@@ -83,6 +86,7 @@ pip install -e ../slim-domain-oss[postgres] -e ../slim-report-engine-oss   # OSS
 python scripts/seed_demo.py              # migrations (portal + slim-data) + OSS demo SLIM data + catalog + demo ruleset
 PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff --email you@lab.example --initials JM --lab-role supervisor
 uvicorn --factory slim_lab_portal.main:create_app --reload   # http://127.0.0.1:8000, API docs at /api/docs
+python -m slim_lab_portal.cli verify     # replay every result + check the audit chain (Postgres)
 pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2://... pytest  to run on Postgres
 ```
 
@@ -118,7 +122,8 @@ slim_lab_portal/
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
-├── cli.py           # migrate (portal + slim-data), create-staff, create-customer-user, sync-analysis-catalog, sync-personas
+├── audit.py         # slim-domain's audit log: install_audit_log (Postgres), chain_check for verify
+├── cli.py           # migrate (portal + slim-data + audit log), verify, create-staff, create-customer-user, sync-analysis-catalog, sync-personas
 ├── alembic.ini, migrations/   # Alembic; only manages tables on db.Base
 ├── templates/       # base, _macros, login, error, requests/{list,new,detail}, admin/{home,users}
 └── static/          # css/style.css, admin.css (.admin-theme), portal.css (components), js/request_form.js

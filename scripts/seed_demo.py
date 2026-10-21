@@ -34,6 +34,7 @@ from sqlalchemy.engine import make_url
 
 import slim_lab_portal
 from slim_lab_portal import slim_tables as t
+from slim_lab_portal.audit import install_audit_log
 from slim_lab_portal.catalog import sync_analysis_catalog
 from slim_lab_portal.config import load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
@@ -114,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
               + ", ".join(report.not_in_catalog))
 
     migrate_slim_data(portal_engine)
+    audited = install_audit_log(portal_engine)  # before the scenarios, so their writes are chained (D-77)
     with make_session_factory(portal_engine)() as session:
         reference = load_reference(slim_engine, portal_engine)
         analysis_id = publish_demo_rules(session, reference)
@@ -122,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         scenarios = {} if args.no_scenarios else seed_scenarios(session, reference, SpecReader(slim_engine))
         session.commit()
     print(f"slim-data: demo ruleset published for {DEMO_RULESET_ANALYSIS} (analysis {analysis_id}), demo policy.")
+    print(f"Audit log on {len(audited)} tables." if audited else "No audit log (not Postgres, or no SLIM tables).")
     print(f"{personas} demo personas (offered when DEMO_PERSONAS is on).")
     if scenarios:
         print("Demo scenarios: " + ", ".join(f"{name} {tr}" for name, tr in scenarios.items()))
