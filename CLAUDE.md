@@ -70,7 +70,7 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    once on real TRs). Walkthrough ✅.
 11. slim-data M7: `audit.py` installs slim-domain's hash-chained audit log over every table on Postgres
    (`cli migrate` and the seed, once SLIM's tables exist; slim-data D-77; slim-domain is now required);
-   `cli verify` runs slim-data's `verify` with slim-domain's `verify_chain` (D-76), exit 1 on a problem.
+   `cli verify` runs slim-data's `verify` with slim-domain's `verify_chain` (D-76), exit 1 on a problem. Walkthrough ✅.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,
