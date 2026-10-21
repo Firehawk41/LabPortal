@@ -465,7 +465,12 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
 - Customer/staff can update `expected_arrival_date` while SUBMITTED (with history).
 - Expected arrival *time* for Same Day / Call-in RUSH; making the date required for rush samples.
 - Staff "incoming" (expected today/this week) and "overdue" (expected passed, not received) views.
-- Hash-chained audit (slim-domain `infrastructure/audit.py`) over the TR tables.
+- ~~Hash-chained audit over the TR tables~~: built (slim-data D-77, `audit.py`, every table on Postgres).
+- **Anchor the audit chain.** Its hashes use no secret, so a table owner could recompute every hash after
+  an edit and the chain would still check out. Copy the latest hash somewhere the owner can't rewrite
+  (e.g. printed on each report issue, or stored outside the database); `verify` compares against it.
+- **Database role split.** Migrations run as the table owner; the app connects as a login with only
+  INSERT / SELECT, so it can't disable a trigger or edit the log. Deployment work: belongs with (C).
 - **Repeat a previous request**: copy TR00042 into a new form and change only the sample IDs — the
   improvement over Excel for customers who send the same panel regularly.
 - Upload sample IDs from a CSV/XLSX column (beyond pasting).

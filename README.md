@@ -12,9 +12,9 @@ the shape defined in [`docs/SLIM_DOMAIN_V2.md`](docs/SLIM_DOMAIN_V2.md), so the 
 can consume them directly — no Excel in between.
 
 > **Status:** rebuilt from a standalone Flask form ("LabPortal") into a FastAPI module of the SLIM
-> ecosystem. Submission, lab workflow and reference data work end to end on the OSS demo data, and
-> received requests feed the OSS report engine (`slim_lab_portal/bridge.py`). See `CLAUDE.md` for
-> what's next.
+> ecosystem. Submission, lab workflow, reference data and **analytical results** (through
+> [slim-data](https://github.com/Firehawk41/slim-data-oss)) work end to end on the OSS demo data.
+> See `CLAUDE.md` for what's next.
 
 ## What it does
 
@@ -27,6 +27,17 @@ can consume them directly — no Excel in between.
   and manage users.
 - **SLIM reference data** (customers, chemicals, elements, analyses) is read from the shared
   database through a periodically refreshed cache.
+- **Results** (staff, `/results`), through slim-data: upload an instrument CSV (preview, then all or
+  nothing), and a versioned rules engine decides each result. Then review the batch, accept, send to
+  rerun, record exceptions, release, and issue the report. Four-eyes and role rules come from slim-data's
+  policy, and the request's status follows what actually happened: first readings → in progress,
+  issued report → partial / complete report.
+- **Demo personas** (`DEMO_PERSONAS=true`): "Continue as..." a customer, analyst, reviewer or
+  supervisor. Their actions are recorded as *asserted*, never as logged in. The demo seed pre-runs nine
+  result scenarios on real requests, so a first visitor already sees history.
+- **Audit:** on Postgres, slim-domain's hash-chained change log covers every table.
+  `python -m slim_lab_portal.cli verify` replays every stored result through its ruleset and checks
+  the chain. It exits with 1 on any mismatch.
 - **JSON API** at `/api/docs`; every request is also available as the TR domain object.
 
 ## OSS only
@@ -59,7 +70,8 @@ PORTAL_PASSWORD='at-least-12-chars' python -m slim_lab_portal.cli create-staff -
 uvicorn --factory slim_lab_portal.main:create_app --reload
 ```
 
-Open http://127.0.0.1:8000 (API docs at `/api/docs`). Create a customer user with
+Open http://127.0.0.1:8000 (API docs at `/api/docs`). Set `DEMO_PERSONAS=true` to pick a persona
+instead of logging in, and run `python -m slim_lab_portal.cli verify` to check the stored results. Create a customer user with
 `python -m slim_lab_portal.cli create-customer-user --email you@customer.example --customer-id 1`.
 Run the tests with `pytest`; `e2e/request_flow.js` is a Playwright run-through of the form.
 
@@ -74,3 +86,5 @@ this one): `docker compose up --build`, then create a staff user with
 - CSRF tokens on every state-changing route (enforced by a test).
 - `SameSite=Lax`, `HttpOnly` session cookies (`Secure` in production); session rotated on login.
 - 1 MB request body cap.
+- Append-only results (slim-data's triggers) and a hash-chained change log (slim-domain) on Postgres:
+  edits are refused, and an edit by the table owner is detected by `verify`.
