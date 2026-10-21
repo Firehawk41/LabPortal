@@ -92,7 +92,7 @@ pytest                                   # TEST_DATABASE_URL=postgresql+psycopg2
 
 Or `docker compose up --build`: Postgres 16 shared like the ecosystem (SLIM demo tables + portal
 tables), a one-shot `seed` service (needs `../slim-domain-oss` and `../slim-report-engine-oss`), and the
-portal on :8000. Set `LIMS_API_TOKEN` to let slim-lims call the API.
+portal on :8000 with demo personas on (`/demo/personas`). Set `LIMS_API_TOKEN` to let slim-lims call the API.
 
 ## File Map
 
