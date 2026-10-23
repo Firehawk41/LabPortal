@@ -533,6 +533,8 @@ reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templa
   and when it was paid; "Invoice sent" also moves the TR to invoiced (the status slim-lims knows).
   Until the invoicing program is rewired to read SLIM (TRs and report issues) instead of CSV, staff
   record "Invoice sent" / "Mark paid" on the card; the invoicing module will write these rows instead.
+  Until then the column reads "Paid (recorded by the lab)" (Jamie), so a missing click is never read
+  as an unpaid bill.
   Rejected: a PAID status (puts accounting in the TR lifecycle; breaks when one invoice covers several
   TRs or a TR is billed twice).
 - The old request list stays (`/admin` for staff, `/requests` for customers).

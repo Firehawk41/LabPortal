@@ -34,7 +34,7 @@
     {% for key, title, cards in columns %}
       <section class="board__column board__column--{{ key }}" role="listitem" aria-labelledby="col-{{ key }}">
         <h2 id="col-{{ key }}" class="board__title">{{ title }} <span class="board__count">{{ cards|length }}</span></h2>
-        {% if key == "paid" %}<p class="muted board__note">Latest {{ paid_shown }}.</p>{% endif %}
+        {% if key == "paid" %}<p class="muted board__note">Latest {{ paid_shown }}. Recorded by lab staff until invoicing is connected to accounting.</p>{% endif %}
         {% for card in cards %}
           {% set s = card.tr %}
           <article class="card">

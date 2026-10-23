@@ -33,6 +33,9 @@ from slim_lab_portal.models import LAB_ROLE_ANALYST, LAB_ROLE_REVIEWER, LAB_ROLE
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
 
+# Payment is recorded by staff until the invoicing module (synced with accounting) records it: the
+# title says so, so nobody takes a missing click for an unpaid bill (spec §13).
+PAID_TITLE = "Paid (recorded by the lab)"
 COLUMNS = (
     ("expected", "Expected"),
     ("received", "Received"),
@@ -41,7 +44,7 @@ COLUMNS = (
     ("partial_report", "Partial report"),
     ("to_invoice", "To invoice"),
     ("invoice_sent", "Invoice sent"),
-    ("paid", "Paid"),
+    ("paid", PAID_TITLE),
 )
 # Customers see where their request is, not the lab's internal stages.
 CUSTOMER_COLUMNS = (
@@ -49,7 +52,7 @@ CUSTOMER_COLUMNS = (
     ("at_lab", "At the lab", ("received", "in_analysis", "ready_to_report")),
     ("published", "Results published", ("partial_report", "to_invoice")),
     ("invoice_sent", "Invoice sent", ("invoice_sent",)),
-    ("paid", "Paid", ("paid",)),
+    ("paid", PAID_TITLE, ("paid",)),
 )
 PAID_SHOWN = 10  # the paid column is a tail, not an archive
 

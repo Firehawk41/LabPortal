@@ -87,7 +87,7 @@ def test_customers_see_their_own_requests_in_plain_columns(engine, db, seeded, r
     customer = db.scalars(select(User).where(User.is_persona.is_(True), User.customer_id.is_not(None))).one()
     columns = b.board(db, customer, reference)
     assert [title for _, title, _ in columns] == ["Not arrived yet", "At the lab", "Results published",
-                                                  "Invoice sent", "Paid"]
+                                                  "Invoice sent", "Paid (recorded by the lab)"]
     assert where(columns, seeded["amended"])[0] == "published" and where(columns, seeded["clean_pass"])[0] == "paid"
     shown = {card.tr.tr_number for _, _, cards in columns for card in cards}
     assert seeded["cups_disagree"] not in shown  # customer B's
