@@ -33,7 +33,7 @@ def _post_status(client, page_path, **data):
 def test_customer_list_and_detail(submitted):
     login(submitted, "jane@acme.example")
     listing = submitted.get("/").text
-    assert "TR00001" in listing and "Submitted" in listing
+    assert "TR00001" in listing and "Not arrived yet" in listing  # the board (spec §13)
     detail = submitted.get("/requests/TR00001").text
     assert "S-001" in detail and "36 Elements" in detail and "Fe" in detail  # names, not IDs
     assert "Report by 15:00" in detail.replace("report by", "Report by")

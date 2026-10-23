@@ -27,7 +27,7 @@ def test_email_is_case_insensitive(client, staff_user):
 def test_customer_login_sees_their_board_and_list(client, customer_user):
     login(client, "jane@acme.example")
     response = client.get("/")
-    assert response.status_code == 200 and "My requests" in response.text and "In the lab" in response.text
+    assert response.status_code == 200 and "My requests" in response.text and "At the lab" in response.text
     assert "My testing requests" in client.get("/requests").text
 
 

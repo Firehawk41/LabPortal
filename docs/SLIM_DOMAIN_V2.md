@@ -518,16 +518,21 @@ reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templa
 
 - **Columns follow what happened** (cards don't drag): Expected (submitted) · Received (checked in,
   no readings) · In analysis · Ready to report (released results not on an issued report) · Partial
-  report · To invoice (complete report) · Invoiced (the latest 10). Cancelled TRs are left off.
+  report · To invoice (complete report) · Invoice sent · Paid (the latest 10). Cancelled TRs are left off.
 - **One card per TR**, with one chip per sample × analysis saying what its results need: rerun or
   exception, rerun requested, needs supervisor, being corrected, to review, to release, awaiting
   results, released, reported. A chip links to its prep batch.
 - **Supervisor first; roles take away.** The supervisor's board has every action (check in, upload
   results, open the batch, issue or open the report, mark invoiced); the backend's rules decide what a
   click may do. "Needs me" narrows to the cards a lab role acts on (a supervisor: all of them).
-  Customers see only their own TRs, read-only, in plain columns (Submitted · In the lab · Partial
-  report · Complete · Invoiced).
-- **Invoicing is part of the system**, not an add-on: it has its columns now. Until the invoicing
-  program is rewired to read SLIM (TRs and report issues) instead of CSV, "Mark invoiced" is the
-  staff status change.
+  Customers see only their own TRs, read-only, in plain columns (Not arrived yet · At the lab ·
+  Results published · Invoice sent · Paid) and open **every report issued** for them
+  (`/requests/{tr}/reports`): each rebuilt as of its issue and checked against the hash recorded then.
+- **Invoicing is part of the system**, not an add-on (Jamie, option A): **payment is invoice data,
+  never a TR status.** `tr_invoices` (portal-owned, `invoices.py`) holds each invoice sent for a TR
+  and when it was paid; "Invoice sent" also moves the TR to invoiced (the status slim-lims knows).
+  Until the invoicing program is rewired to read SLIM (TRs and report issues) instead of CSV, staff
+  record "Invoice sent" / "Mark paid" on the card; the invoicing module will write these rows instead.
+  Rejected: a PAID status (puts accounting in the TR lifecycle; breaks when one invoice covers several
+  TRs or a TR is billed twice).
 - The old request list stays (`/admin` for staff, `/requests` for customers).
