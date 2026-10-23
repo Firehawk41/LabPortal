@@ -509,3 +509,25 @@ reference in `note`.
 
 **Converting to slim-domain v1** (until §9): `slim_lab_portal/bridge.py` `to_slim_v1` shows the
 mapping; it moves to slim-domain or slim-lims when they are connected.
+
+## 13. Lab board (Jamie, 2026-10-23)
+
+The home page for everyone: each live TR is a card in the column of where it has got to, so the lab
+sees at a glance what is expected, what is in but not analysed, what is being decided, what can be
+reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templates/board.html`.
+
+- **Columns follow what happened** (cards don't drag): Expected (submitted) · Received (checked in,
+  no readings) · In analysis · Ready to report (released results not on an issued report) · Partial
+  report · To invoice (complete report) · Invoiced (the latest 10). Cancelled TRs are left off.
+- **One card per TR**, with one chip per sample × analysis saying what its results need: rerun or
+  exception, rerun requested, needs supervisor, being corrected, to review, to release, awaiting
+  results, released, reported. A chip links to its prep batch.
+- **Supervisor first; roles take away.** The supervisor's board has every action (check in, upload
+  results, open the batch, issue or open the report, mark invoiced); the backend's rules decide what a
+  click may do. "Needs me" narrows to the cards a lab role acts on (a supervisor: all of them).
+  Customers see only their own TRs, read-only, in plain columns (Submitted · In the lab · Partial
+  report · Complete · Invoiced).
+- **Invoicing is part of the system**, not an add-on: it has its columns now. Until the invoicing
+  program is rewired to read SLIM (TRs and report issues) instead of CSV, "Mark invoiced" is the
+  staff status change.
+- The old request list stays (`/admin` for staff, `/requests` for customers).

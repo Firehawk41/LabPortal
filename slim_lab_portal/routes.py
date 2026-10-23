@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from slim_lab_portal import board
 from slim_lab_portal.api import Service, get_reference
 from slim_lab_portal.auth import CurrentUser, RequireStaff, RequireUser
 from slim_lab_portal.db import get_db
@@ -39,9 +40,29 @@ def _int_or_none(value: str | None) -> int | None:
 # ---------------------------------------------------------------- requests (customers and staff)
 
 @router.get("/", name="index")
-def index(request: Request, user: CurrentUser, service: Service, page: int = 1):
+def index(request: Request, user: CurrentUser, db: DB, reference: Reference,
+          customer: str = "", analysis: str = "", rush: str = "", mine: str = ""):
+    """The board (spec §13): every live TR where it has got to. Customers see their own, read-only."""
     if user is None:
         return RedirectResponse("/login", status_code=303)
+    filters = {"customer": _int_or_none(customer), "analysis": _int_or_none(analysis),
+               "rush": rush == "1", "mine": mine == "1" and user.is_staff}
+    columns = board.board(db, user, reference, customer_id=filters["customer"], analysis_id=filters["analysis"],
+                          rush=filters["rush"], mine=filters["mine"])
+    analyses = sorted({a for _, _, cards in columns for c in cards for s in c.tr.samples for a in s.analysis_ids})
+    return render(request, "board.html", {
+        "columns": columns,
+        "filters": filters,
+        "customers": reference.customer_choices() if user.is_staff else [],
+        "analyses": [reference.analysis(a) for a in analyses if reference.analysis(a)],
+        "invoiced_shown": board.INVOICED_SHOWN,
+        "can_invoice": user.is_staff,
+        "TRStatus": TRStatus,
+    })
+
+
+@router.get("/requests", name="my_requests")
+def my_requests(request: Request, user: RequireUser, service: Service, page: int = 1):
     if user.is_staff:
         return _redirect(request, "admin_home")
     result = service.list(user, page=max(page, 1), per_page=PER_PAGE)
@@ -81,6 +102,7 @@ def change_status_form(
     note: Annotated[str, Form()] = "",
     date_received: Annotated[str, Form()] = "",
     received_by: Annotated[str, Form()] = "",
+    back_to_board: Annotated[str, Form()] = "",
 ):
     try:
         data = StatusChangeIn(
@@ -97,6 +119,8 @@ def change_status_form(
         flash(request, _first_error(e), "error")
     except NotFound:
         flash(request, f"Testing Request {tr_number} not found.", "error")
+        return _redirect(request, "index")
+    if back_to_board:  # "Mark invoiced" on the board returns there
         return _redirect(request, "index")
     return _redirect(request, "request_detail", tr_number=tr_number)
 

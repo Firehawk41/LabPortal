@@ -4,6 +4,8 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from slim_data.persistence import migrate as slim_data_migrate
+
 from slim_lab_portal.config import Settings
 from slim_lab_portal.db import Base, make_engine, make_session_factory
 from slim_lab_portal.main import create_app
@@ -41,6 +43,9 @@ def engine(tmp_path):
     slim_metadata.drop_all(engine)  # SLIM test tables some tests create (tests/slim_fixtures.py)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:  # slim-data's tables (a required library): fresh for every test
+        slim_data_migrate.downgrade(connection)
+        slim_data_migrate.upgrade(connection)
     yield engine
     engine.dispose()
 

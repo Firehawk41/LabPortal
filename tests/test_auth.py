@@ -13,10 +13,10 @@ def test_login_page_sets_csrf_token(client):
     assert csrf_from(response.text)
 
 
-def test_staff_login_lands_on_admin(client, staff_user):
+def test_staff_login_lands_on_the_board(client, staff_user):
     response = login(client, "staff@lab.example")
     assert response.status_code == 303
-    assert client.get("/", follow_redirects=False).headers["location"] == "/admin"
+    assert "Lab board" in client.get("/").text  # spec §13
     assert "Testing requests" in client.get("/admin").text
 
 
@@ -24,11 +24,11 @@ def test_email_is_case_insensitive(client, staff_user):
     assert login(client, "  STAFF@Lab.Example ").status_code == 303
 
 
-def test_customer_login_sees_form_page(client, customer_user):
+def test_customer_login_sees_their_board_and_list(client, customer_user):
     login(client, "jane@acme.example")
     response = client.get("/")
-    assert response.status_code == 200
-    assert "My testing requests" in response.text
+    assert response.status_code == 200 and "My requests" in response.text and "In the lab" in response.text
+    assert "My testing requests" in client.get("/requests").text
 
 
 def test_wrong_password_is_rejected(client, staff_user):

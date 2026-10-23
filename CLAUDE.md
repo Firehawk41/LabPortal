@@ -75,9 +75,13 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    code (10 and 36 Elements share the metals rules; anions on 5 Anions; acid assay, RSD < 1 %), and
    `OTHER_ANALYTES` lets NO3 / SO4 / Assay through the lookup. The OSS demo chemicals are now IPA, HNO3,
    Acetone, H2O2, PGMEA (slim-report-engine-oss); the demo's assay TRs are HNO3, the rest IPA.
+13. ✅ Lab board (spec §13): `board.py` + `templates/board.html` is `/` for everyone. Columns follow TR status +
+   slim-data results; chips per sample × analysis; supervisor-first actions; customers read-only, plain columns.
+14. ⏸ Invoicing, integral to the system (Jamie): rewire SLIM-Invoicing-Program to read SLIM (TRs + slim-data report
+   issues) instead of CSV, driven from the board's To invoice column. Comes after D. Needs the user's go-ahead.
 
-Agreed order: A, B and link-ready (9) done. Next D
-when approved; C last. The user is token-constrained: small, focused steps,
+Agreed order: A, B, link-ready (9) and the board (13) done. Next D when approved, then invoicing (14);
+C last. The user is token-constrained: small, focused steps,
 short replies.
 
 ## How to Run
@@ -126,7 +130,8 @@ slim_lab_portal/
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409
 ├── security.py      # bcrypt hashing, CSRF (csrf_token / csrf_protect), headers + body-size middleware
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
-├── routes.py        # Pages: / (customer list), /requests/new|{tr}, status form, /admin, /admin/users
+├── board.py         # the lab board (spec §13): TR cards by stage, chips per sample × analysis
+├── routes.py        # Pages: / (board), /requests (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
 ├── audit.py         # slim-domain's audit log: install_audit_log (Postgres), chain_check for verify
 ├── cli.py           # migrate (portal + slim-data + audit log), verify, create-staff, create-customer-user, sync-analysis-catalog, sync-personas
