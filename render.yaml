@@ -1,7 +1,8 @@
 # The public demo on Render (free plan): Postgres + the portal, seeded with the OSS demo data.
 # OSS ONLY: PORTAL_ALLOWED_DB_HOSTS is set to this blueprint's own demo database host, nothing else
-# (see slim_lab_portal/oss_guard.py). Resource names are unchanged on purpose: renaming the
-# database here would make Render create a new, empty one.
+# (see slim_lab_portal/oss_guard.py). The service is named for the host this portal becomes
+# (slim-lims-oss.onrender.com). The database keeps its old name on purpose: renaming it here would
+# make Render create a second one, and the free plan allows only one.
 databases:
   - name: labportal-db
     plan: free
@@ -10,7 +11,7 @@ databases:
 
 services:
   - type: web
-    name: labportal
+    name: slim-lims-oss
     runtime: python
     plan: free
     # The demo seed loads SLIM's fictional reference data from slim-report-engine-oss's demo/demo.py.
