@@ -6,7 +6,7 @@ What it does, in order:
   1. Runs the portal's migrations.
   2. If SLIM's reference tables are missing or empty, creates and fills them by running
      slim-report-engine-oss's own `demo/demo.py` seed() — fictional customers "A".."Z",
-     "Chemical 01".."05", "Water", the periodic table and the supported analyses. If they
+     IPA, HNO3, Acetone, H2O2, PGMEA, "Water", the periodic table and the supported analyses. If they
      already hold data they are LEFT UNTOUCHED: this script never writes into a populated
      SLIM database.
   3. Syncs the portal-owned analysis_catalog from slim_lab_portal/data/analysis_catalog.csv.
@@ -42,7 +42,7 @@ from slim_lab_portal.oss_guard import assert_oss_database
 from slim_lab_portal.demo_scenarios import seed_scenarios
 from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.reference_cache import load_reference
-from slim_lab_portal.results import DEMO_RULESET_ANALYSIS, SpecReader, migrate_slim_data, publish_demo_rules
+from slim_lab_portal.results import SpecReader, migrate_slim_data, publish_demo_rules
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OSS_DIR = REPO_ROOT.parent / "slim-report-engine-oss"
@@ -118,12 +118,13 @@ def main(argv: list[str] | None = None) -> int:
     audited = install_audit_log(portal_engine)  # before the scenarios, so their writes are chained (D-77)
     with make_session_factory(portal_engine)() as session:
         reference = load_reference(slim_engine, portal_engine)
-        analysis_id = publish_demo_rules(session, reference)
+        analyses = publish_demo_rules(session, reference)
         personas = sync_personas(session)
         session.commit()
         scenarios = {} if args.no_scenarios else seed_scenarios(session, reference, SpecReader(slim_engine))
         session.commit()
-    print(f"slim-data: demo ruleset published for {DEMO_RULESET_ANALYSIS} (analysis {analysis_id}), demo policy.")
+    print("slim-data: demo rulesets published for " + ", ".join(code for code, _ in analyses.values())
+          + "; demo policy.")
     print(f"Audit log on {len(audited)} tables." if audited else "No audit log (not Postgres, or no SLIM tables).")
     print(f"{personas} demo personas (offered when DEMO_PERSONAS is on).")
     if scenarios:

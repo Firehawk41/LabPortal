@@ -20,18 +20,22 @@ from slim_lab_portal.repositories import TRSubmissionRepository
 from slim_lab_portal.results import document_sha256, publish_demo_rules, report_document
 from tests.conftest import make_settings, postgres_only
 
-ELEMENTS = {26: "Fe", 29: "Cu", 30: "Zn", 28: "Ni", 24: "Cr", 25: "Mn"}
-SPECS = {(2, 2, ""): {"Zn": 0.2}}  # customer B, Chemical 01, as in the OSS demo data
+ELEMENTS = {26: "Fe", 29: "Cu", 30: "Zn", 28: "Ni", 24: "Cr", 25: "Mn", 9: "F", 17: "Cl"}
+SPECS = {(2, 2, ""): {"Zn": 0.2}}  # customer B, IPA, as in the OSS demo data
+TEN, THIRTY_SIX, ANIONS, ASSAY = 1, 3, 6, 17  # the OSS demo data's IDs
 
 
 @pytest.fixture
 def reference():
     return StaticReferenceData.of(
         customers=[CustomerRef(1, "A", "1 A Street"), CustomerRef(2, "B", "2 B Street")],
-        chemicals=[ChemicalRef(2, "Chemical 01")],
+        chemicals=[ChemicalRef(2, "IPA"), ChemicalRef(3, "HNO3")],
         elements=[ElementRef(i, s, s) for i, s in ELEMENTS.items()],
-        analyses=[AnalysisRef(1, "10 Elements", "10_elements_icpms", "Metals",
-                              request_types=frozenset({RequestType.CHEMICAL}))],
+        analyses=[AnalysisRef(id, name, code, group, request_types=frozenset({RequestType.CHEMICAL}))
+                  for id, name, code, group in ((TEN, "10 Elements", "10_elements_icpms", "Metals"),
+                                                (THIRTY_SIX, "36 Elements", "36_elements_icpms", "Metals"),
+                                                (ANIONS, "5 Anions", "5_anions", "Anions"),
+                                                (ASSAY, "Assay", "assay", "Assay & titration"))],
     )
 
 
@@ -56,7 +60,12 @@ def test_every_scenario_runs_on_its_own_received_tr(db, seeded):
                             "rerun_exception", "accepted", "amended", "line_by_line"]
     assert list(seeded.values()) == [f"TR{n:05d}" for n in range(1, 10)]
     tr = TRSubmissionRepository(db).get_by_tr_number(seeded["cups_disagree"])
-    assert tr.customer_id == 2 and tr.samples[0].analysis_ids == (1,)
+    assert tr.customer_id == 2 and tr.samples[0].analysis_ids == (TEN,) and tr.samples[0].chemical_name == "IPA"
+    analyses = {name: TRSubmissionRepository(db).get_by_tr_number(number).samples[0].analysis_ids
+                for name, number in seeded.items()}  # D-78
+    assert analyses["clean_pass"] == (THIRTY_SIX,) and analyses["below_mdl"] == (ANIONS,)
+    assay = TRSubmissionRepository(db).get_by_tr_number(seeded["amended"])
+    assert assay.samples[0].analysis_ids == (ASSAY,) and assay.samples[0].chemical_name == "HNO3"
 
 
 def test_statuses_follow_d71(db, seeded):

@@ -29,7 +29,7 @@ from tests.conftest import PASSWORD, csrf_from, login, login_api
 from tests.factories import NOW, STAFF_ACTOR, sample, submission
 from tests.slim_fixtures import create_slim_tables
 
-TEN, THIRTY_SIX = 5, 1  # analysis IDs: 10 Elements has the demo ruleset, 36 Elements has none
+TEN, THIRTY_SIX = 5, 1  # analysis IDs: 10 Elements has the demo ruleset, 26 Elements (THIRTY_SIX's slot) none
 HEADER = ("lab_sample_id,analysis_code,analyte,role,replicate,value,unit,mdl,dilution_factor,run_code,"
           "instrument,analyst,analyzed_at,prep_batch,prep_method,spike_added,rejected,note")
 
@@ -42,8 +42,12 @@ def reference():
         chemicals=[ChemicalRef(2, "Chemical 01")],
         elements=[ElementRef(26, "Fe", "Iron"), ElementRef(29, "Cu", "Copper")],
         analyses=[
-            AnalysisRef(THIRTY_SIX, "36 Elements", "36_elements_icpms", "Metals", request_types=frozenset({C})),
+            AnalysisRef(THIRTY_SIX, "26 Elements", "26_elements_icpms", "Metals", request_types=frozenset({C})),
             AnalysisRef(TEN, "10 Elements", "10_elements_icpms", "Metals", request_types=frozenset({C})),
+            # The other demo analyses (D-78): publish_demo_rules needs them all in the catalog.
+            AnalysisRef(7, "36 Elements", "36_elements_icpms", "Metals", request_types=frozenset({C})),
+            AnalysisRef(8, "5 Anions", "5_anions", "Anions", request_types=frozenset({C})),
+            AnalysisRef(9, "Assay", "assay", "Assay & titration", request_types=frozenset({C})),
         ],
     )
 
@@ -66,7 +70,7 @@ def app(engine, reference):
 @pytest.fixture
 def lab(app, db, reference, staff_user):
     """Demo rules published; JM supervisor (staff_user), RV reviewer, AN analyst; TR00001 received (2 samples on 10 Elements), TR00002 only
-    submitted, TR00003 received on 36 Elements (no ruleset)."""
+    submitted, TR00003 received on 26 Elements (no ruleset)."""
     publish_demo_rules(db, reference)
     for initials, lab_role in (("AN", LAB_ROLE_ANALYST), ("RV", LAB_ROLE_REVIEWER)):
         db.add(User(email=f"{initials.lower()}@lab.example", password_hash=hash_password(PASSWORD), role=ROLE_STAFF,
@@ -149,7 +153,7 @@ def test_a_refused_file_writes_nothing(client, lab, content, column, message):
 
 def test_no_published_ruleset_rolls_the_whole_upload_back(client, lab):
     login_api(client, "staff@lab.example")
-    response = upload(client, csv(tr="TR00003", analysis="36_elements_icpms"))
+    response = upload(client, csv(tr="TR00003", analysis="26_elements_icpms"))
     assert response.status_code == 422 and "no published ruleset" in response.json()["detail"]
     assert client.get("/api/results/batches").json() == []
 
@@ -236,10 +240,16 @@ def test_spec_reader_reads_slim_specifications(engine):
     assert specs(9, 2, "") == {}
 
 
-def test_demo_rules_bind_to_ten_elements_by_code(app, db, reference):
-    assert publish_demo_rules(db, reference) == TEN
-    assert publish_demo_rules(db, reference) == TEN  # content-hashed: nothing new
-    assert ruleset_for(db, TEN, "microwave HNO3").ruleset.analysis_id == TEN
+def test_demo_rules_bind_to_their_analyses_by_code(app, db, reference):
+    analyses = {"10_elements": ("10_elements_icpms", TEN), "36_elements": ("36_elements_icpms", 7),
+                "anions": ("5_anions", 8), "assay": ("assay", 9)}
+    assert publish_demo_rules(db, reference) == analyses
+    assert publish_demo_rules(db, reference) == analyses  # content-hashed: nothing new
+    assert ruleset_for(db, TEN, "microwave HNO3").ruleset.name == "demo-metals-icpms"
+    assert ruleset_for(db, 7, "microwave HNO3").ruleset.name == "demo-metals-icpms"  # D-78: shared
+    assert ruleset_for(db, 8, "dilution").ruleset.name == "demo-anions-ic"
+    assert ruleset_for(db, 9, "as received").ruleset.name == "demo-acid-assay"
+    assert ruleset_for(db, THIRTY_SIX, "microwave HNO3") is None
     assert current_policy(db).policy.name == "demo"
 
 

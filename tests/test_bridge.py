@@ -81,7 +81,7 @@ def _text(sheets) -> str:
 
 
 def test_chemical_submission_builds_report_sheets(services):
-    chem = services.chemical_svc.get_by_name("Chemical 01")
+    chem = services.chemical_svc.get_by_name("IPA")
     sub = _received(submission(
         tr_number="TR00042", id=42, customer_id=2,  # demo customer "B" has specification limits
         samples=(
@@ -131,7 +131,7 @@ def test_wafer_submission_builds_report_sheets(services, unit):
 
 def test_stored_submission_round_trips_into_report(services, db):
     """Through the portal's own storage, as the real flow will be."""
-    chem = services.chemical_svc.get_by_name("Chemical 02")
+    chem = services.chemical_svc.get_by_name("HNO3")
     repo = TRSubmissionRepository(db)
     stored = repo.add(submission(samples=(sample(1, chemical_id=chem.id, chemical_name=chem.name,
                                                  analysis_ids=_ids(services, "36 Elements")),)))
