@@ -30,6 +30,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       # slim-data and slim-domain come from their GitHub repos (pyproject.toml); the report engine
-      # too, so the bridge tests run instead of skipping.
-      - run: pip install -e ".[dev]" "slim-report-engine @ git+https://github.com/Firehawk41/slim-report-engine-oss@main"
+      # too, so the bridge tests run instead of skipping. slim-domain is named again here: the report
+      # engine asks for it by bare name, which pip won't match to the editable install's git URL.
+      - run: >-
+          pip install -e ".[dev]"
+          "slim-domain @ git+https://github.com/Firehawk41/slim-domain-oss@main"
+          "slim-report-engine @ git+https://github.com/Firehawk41/slim-report-engine-oss@main"
       - run: pytest -q
