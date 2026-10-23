@@ -71,6 +71,10 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
 11. slim-data M7: `audit.py` installs slim-domain's hash-chained audit log over every table on Postgres
    (`cli migrate` and the seed, once SLIM's tables exist; slim-data D-77; slim-domain is now required);
    `cli verify` runs slim-data's `verify` with slim-domain's `verify_chain` (D-76), exit 1 on a problem. Walkthrough ✅.
+12. slim-data D-78: four demo analyses. `results.DEMO_ANALYSES` binds slim-data's demo rulesets by catalog
+   code (10 and 36 Elements share the metals rules; anions on 5 Anions; acid assay, RSD < 1 %), and
+   `OTHER_ANALYTES` lets NO3 / SO4 / Assay through the lookup. The OSS demo chemicals are now IPA, HNO3,
+   Acetone, H2O2, PGMEA (slim-report-engine-oss); the demo's assay TRs are HNO3, the rest IPA.
 
 Agreed order: A, B and link-ready (9) done. Next D
 when approved; C last. The user is token-constrained: small, focused steps,

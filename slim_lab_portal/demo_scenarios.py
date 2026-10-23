@@ -1,8 +1,8 @@
 """slim-data's named demo scenarios, seeded into the portal (slim-data D-75). Demo databases only.
 
 slim-data's scenarios are host-agnostic: this module is the portal's `DemoHost`. Each scenario
-gets a real TR (submitted and checked in by the supervisor persona, ordering 10 Elements for
-customer A's "Chemical 01", or customer B's when the scenario needs a spec), readings uploaded by
+gets a real TR (submitted and checked in by the supervisor persona, ordering its demo analysis,
+D-78: customer A's IPA, or customer B's when the scenario needs a spec; an assay is of HNO3), readings uploaded by
 the analyst persona and decisions by the reviewer and supervisor personas, so a first visitor
 already sees history. Afterwards each TR's status follows D-71: in progress once it has readings,
 partial or complete report once a report was issued.
@@ -35,9 +35,9 @@ from slim_lab_portal.models import User
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
 from slim_lab_portal.results import (
-    DEMO_RULESET_ANALYSIS,
     StaffDirectory,
     actor_for,
+    demo_analyses,
     document_sha256,
     reference_lookup,
     report_complete,
@@ -48,18 +48,16 @@ from slim_lab_portal.schemas import StatusChangeIn
 from slim_lab_portal.services import SubmissionService
 from slim_lab_portal.services import actor_for as tr_actor_for
 
-CHEMICAL = "Chemical 01"
-CUSTOMER, SPEC_CUSTOMER = "A", "B"  # in the OSS demo data, B has specs for Chemical 01 (Zn among them)
+CHEMICAL, ACID = "IPA", "HNO3"  # an assay is of an acid; everything else is measured in IPA
+CUSTOMER, SPEC_CUSTOMER = "A", "B"  # in the OSS demo data, B has specs for IPA (Zn among them)
 PERSONAS = {"analyst": "ana@demo.example", "reviewer": "rob@demo.example", "supervisor": "sue@demo.example"}
 
 
 class PortalDemoHost:
     def __init__(self, session: Session, reference: ReferenceData, specs, today: date) -> None:
         self.session, self.reference, self.today = session, reference, today
-        analysis = next((a for a in reference.catalog_analyses() if a.code == DEMO_RULESET_ANALYSIS), None)
-        if analysis is None:
-            raise LookupError(f"analysis {DEMO_RULESET_ANALYSIS!r} is not in the analysis catalog")
-        self.analysis_code, self.analysis_id = analysis.code, analysis.id
+        self.analyses = demo_analyses(reference)
+        self._assay_id = self.analyses["assay"][1]
         people = {role: session.scalars(select(User).where(User.email == email, User.is_persona.is_(True))).first()
                   for role, email in PERSONAS.items()}
         if None in people.values():
@@ -77,11 +75,12 @@ class PortalDemoHost:
             raise LookupError(f"SLIM customer {name!r} not found (seed the OSS demo data first)")
         return customer
 
-    def new_tr(self, scenario: str, samples: int, spec: bool) -> str:
+    def new_tr(self, scenario: str, samples: int, spec: bool, analysis_id: int) -> str:
         customer = self._customer(SPEC_CUSTOMER if spec else CUSTOMER)
-        chemical = self.reference.chemical_by_name(CHEMICAL)
+        name = ACID if analysis_id == self._assay_id else CHEMICAL
+        chemical = self.reference.chemical_by_name(name)
         if chemical is None:
-            raise LookupError(f"SLIM chemical {CHEMICAL!r} not found")
+            raise LookupError(f"SLIM chemical {name!r} not found (seed the OSS demo data first)")
         by = tr_actor_for(self.users["supervisor"])
         at = datetime.combine(self.today, time(8, 0), tzinfo=timezone.utc)
         submission = self.repo.add(TRSubmission(
@@ -94,7 +93,7 @@ class PortalDemoHost:
             results_to=("results@demo.example",), invoice_to=("ap@demo.example",),
             samples=tuple(
                 TRSample(position=p, sample_name=f"{scenario}-{p}", chemical_id=chemical.id, chemical_name=chemical.name,
-                         processing_time=ProcessingTime.THREE_DAYS, analysis_ids=(self.analysis_id,))
+                         processing_time=ProcessingTime.THREE_DAYS, analysis_ids=(analysis_id,))
                 for p in range(1, samples + 1)
             ),
             status_history=(TRStatusEvent(from_status=None, to_status=TRStatus.SUBMITTED, at=at, actor=by),),

@@ -28,18 +28,15 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from slim_data.adapters.slim import SlimReferenceLookup, TrSampleInfo
+from slim_data.demo.scenarios import publish_demo_rules as publish_rules
 from slim_data.domain.actor import Actor
 from slim_data.domain.enums import IdentitySource, Role
-from slim_data.domain.policy import DEMO_POLICY
 from slim_data.domain.results import ReportLine
 from slim_data.domain.values import AnalyteRef, SampleRef
 from slim_data.domain.workflow import WorkflowError
-from slim_data.engine.ruleset import Ruleset
 from slim_data.persistence import migrate
 from slim_data.persistence.results import issues_for_tr
-from slim_data.persistence.rulesets import publish_policy, publish_ruleset
 from slim_data.pipeline.generic_csv import GenericCsv
-from slim_data.rulesets import ruleset_text
 from slim_data.service.imports import ImportReceipt, import_run
 from slim_data.service import workflow as wf
 from slim_data.service.views import ReportView, report_view
@@ -56,10 +53,17 @@ STATUSES_TAKING_RESULTS = frozenset(
     {TRStatus.RECEIVED, TRStatus.IN_PROGRESS, TRStatus.PARTIAL_REPORT, TRStatus.COMPLETE_REPORT}
 )
 
-# The demo metals ruleset is bound to this catalog analysis when published (D-70): by code, never
-# by ID, so it stays right whatever IDs the SLIM demo seed hands out.
-DEMO_RULESET = "demo_metals"
-DEMO_RULESET_ANALYSIS = "10_elements_icpms"
+# slim-data's demo analyses -> the catalog analysis each ruleset is bound to when published (D-70,
+# D-78): by code, never by ID, so it stays right whatever IDs the SLIM demo seed hands out. The lab's
+# 4 Anions has no F, so the anions (F, Cl, NO3, SO4) go on 5 Anions.
+DEMO_ANALYSES = {
+    "10_elements": "10_elements_icpms",
+    "36_elements": "36_elements_icpms",
+    "anions": "5_anions",
+    "assay": "assay",
+}
+# Analytes that aren't element symbols (SLIM has no analysis -> analyte table, D-69 item 6).
+OTHER_ANALYTES = ("NO2", "NO3", "PO4", "SO4", "Assay")
 
 
 def actor_for(user: User) -> Actor:
@@ -130,6 +134,7 @@ def reference_lookup(session: Session, reference: ReferenceData, specs) -> SlimR
         elements=reference.element_choices(),
         samples=TrSampleTables(session),
         specs=cache(specs),
+        ions=OTHER_ANALYTES,
     )
 
 
@@ -164,18 +169,22 @@ def migrate_slim_data(engine: Engine) -> None:
         migrate.upgrade(connection)
 
 
-def publish_demo_rules(session: Session, reference: ReferenceData) -> int:
-    """Publishes the demo metals ruleset, bound to DEMO_RULESET_ANALYSIS, and the demo policy;
-    both are content-hashed, so publishing again changes nothing. Returns the analysis ID."""
-    analysis = next((a for a in reference.catalog_analyses() if a.code == DEMO_RULESET_ANALYSIS), None)
-    if analysis is None:
-        raise LookupError(f"analysis {DEMO_RULESET_ANALYSIS!r} is not in the analysis catalog; "
+def demo_analyses(reference: ReferenceData) -> dict[str, tuple[str, int]]:
+    """slim-data's demo analysis -> (catalog code, analysis ID); refuses if the catalog lacks one."""
+    by_code = {a.code: a.id for a in reference.catalog_analyses()}
+    missing = [code for code in DEMO_ANALYSES.values() if code not in by_code]
+    if missing:
+        raise LookupError(f"analyses {', '.join(missing)} are not in the analysis catalog; "
                           "sync the catalog against SLIM first")
-    body = json.loads(ruleset_text(DEMO_RULESET))
-    body["analysis_id"] = analysis.id
-    publish_ruleset(session, Ruleset.model_validate(body), SEED_ACTOR)
-    publish_policy(session, DEMO_POLICY, SEED_ACTOR)
-    return analysis.id
+    return {key: (code, by_code[code]) for key, code in DEMO_ANALYSES.items()}
+
+
+def publish_demo_rules(session: Session, reference: ReferenceData) -> dict[str, tuple[str, int]]:
+    """Publishes the demo rulesets, each bound to its catalog analysis (DEMO_ANALYSES), and the demo
+    policy; all content-hashed, so publishing again changes nothing. Returns demo_analyses()."""
+    analyses = demo_analyses(reference)
+    publish_rules(session, analyses, SEED_ACTOR)
+    return analyses
 
 
 # ---------------------------------------------------------------- data in
