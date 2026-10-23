@@ -70,7 +70,8 @@ def test_every_scenario_runs_on_its_own_received_tr(db, seeded):
 
 def test_statuses_follow_d71(db, seeded):
     status = {name: TRSubmissionRepository(db).get_by_tr_number(tr).status for name, tr in seeded.items()}
-    assert status["clean_pass"] == status["amended"] == status["rerun_exception"] == TRStatus.COMPLETE_REPORT
+    assert status["amended"] == TRStatus.COMPLETE_REPORT
+    assert status["clean_pass"] == status["rerun_exception"] == TRStatus.INVOICED  # the demo's invoices (spec §13)
     assert status["scale_fault"] == status["line_by_line"] == status["accepted"] == TRStatus.IN_PROGRESS
 
 

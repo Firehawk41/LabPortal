@@ -10,6 +10,9 @@
       {% if current_user.is_staff and s.status not in (TRStatus.SUBMITTED, TRStatus.CANCELLED) %}
         <a href="{{ url_for('results_report', tr_number=s.tr_number) }}">Results report</a> ·
       {% endif %}
+      {% if s.status in (TRStatus.PARTIAL_REPORT, TRStatus.COMPLETE_REPORT, TRStatus.INVOICED) %}
+        <a href="{{ url_for('issued_reports', tr_number=s.tr_number) }}">Issued reports</a> ·
+      {% endif %}
       <a class="muted" href="{{ url_for('get_submission', tr_number=s.tr_number) }}">View as JSON</a>
     </span>
   </div>

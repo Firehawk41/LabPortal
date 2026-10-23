@@ -274,6 +274,17 @@ def document_sha256(document: dict) -> str:
     return sha256(json.dumps(document, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def issued_documents(session: Session, tr_number: str) -> list[dict]:
+    """Each issued report, newest first, as it was issued: the document rebuilt as of its issue (D-73),
+    with whether its hash still matches the one recorded then."""
+    out = []
+    for issue in reversed(issues_for_tr(session, tr_number)):
+        document = report_document(report_view(session, tr_number, as_of=issue.created_at))
+        out.append({"id": issue.id, "amends": issue.amends, "at": issue.created_at, "document": document,
+                    "verified": document_sha256(document) == issue.file_sha256})
+    return out
+
+
 def report_complete(view: ReportView, submission) -> bool:
     """Every analysis ordered on every sample has results, all released (D-71). Analyses slim-data
     never gets readings for keep a TR partial; staff close it with the status form."""

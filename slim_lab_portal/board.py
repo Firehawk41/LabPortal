@@ -10,9 +10,11 @@ Columns follow what happened, never a hand-set position (cards don't drag):
     ready_to_report   released results not on an issued report yet
     partial_report    a partial report went out; the rest is still in the lab
     to_invoice        complete report issued
-    invoiced          the most recent invoiced TRs
+    invoice_sent      invoiced, not paid yet
+    paid              the most recently paid
 
-Invoicing isn't wired yet: "Mark invoiced" is the status change staff already make by hand.
+Payment is invoice data (invoices.py), never a TR status. Until the invoicing module is rewired to
+read SLIM, staff record "Invoice sent" and "Paid" on the card.
 """
 
 from dataclasses import dataclass, field
@@ -26,7 +28,8 @@ from slim_data.service.views import batches
 from sqlalchemy.orm import Session
 
 from slim_lab_portal.domain import TRStatus, TRSubmission
-from slim_lab_portal.models import LAB_ROLE_ANALYST, LAB_ROLE_REVIEWER, LAB_ROLE_SUPERVISOR, User
+from slim_lab_portal.invoices import latest_invoices
+from slim_lab_portal.models import LAB_ROLE_ANALYST, LAB_ROLE_REVIEWER, LAB_ROLE_SUPERVISOR, TRInvoiceRow, User
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
 
@@ -37,17 +40,18 @@ COLUMNS = (
     ("ready_to_report", "Ready to report"),
     ("partial_report", "Partial report"),
     ("to_invoice", "To invoice"),
-    ("invoiced", "Invoiced"),
+    ("invoice_sent", "Invoice sent"),
+    ("paid", "Paid"),
 )
 # Customers see where their request is, not the lab's internal stages.
 CUSTOMER_COLUMNS = (
-    ("expected", "Submitted", ("expected",)),
-    ("in_lab", "In the lab", ("received", "in_analysis", "ready_to_report")),
-    ("partial_report", "Partial report", ("partial_report",)),
-    ("to_invoice", "Complete", ("to_invoice",)),
-    ("invoiced", "Invoiced", ("invoiced",)),
+    ("expected", "Not arrived yet", ("expected",)),
+    ("at_lab", "At the lab", ("received", "in_analysis", "ready_to_report")),
+    ("published", "Results published", ("partial_report", "to_invoice")),
+    ("invoice_sent", "Invoice sent", ("invoice_sent",)),
+    ("paid", "Paid", ("paid",)),
 )
-INVOICED_SHOWN = 10  # the invoiced column is a tail, not an archive
+PAID_SHOWN = 10  # the paid column is a tail, not an archive
 
 # What a sample × analysis needs, worst first. (key, label, who acts on it)
 CHIP_STATES = {
@@ -67,6 +71,7 @@ COLUMN_OWNERS = {
     "expected": LAB_ROLE_SUPERVISOR,
     "ready_to_report": LAB_ROLE_SUPERVISOR,
     "to_invoice": LAB_ROLE_SUPERVISOR,
+    "invoice_sent": LAB_ROLE_SUPERVISOR,  # chase the payment
 }
 
 
@@ -92,6 +97,7 @@ class Card:
     column: str
     chips: list[Chip] = field(default_factory=list)
     issued: bool = False  # a report exists to open
+    invoice: TRInvoiceRow | None = None
 
     @property
     def batches(self) -> list[str]:
@@ -138,7 +144,8 @@ def _batch_index(session: Session) -> dict[tuple[SampleRef, int], str]:
     return index
 
 
-def card_for(session: Session, tr: TRSubmission, reference: ReferenceData, batch_of) -> Card:
+def card_for(session: Session, tr: TRSubmission, reference: ReferenceData, batch_of,
+             invoice: TRInvoiceRow | None = None) -> Card:
     issues = issues_for_tr(session, tr.tr_number)
     on_last_issue = {(li.sample, li.analyte, li.version) for li in issues[-1].lines} if issues else set()
     results: dict[tuple[int, int], list[Result]] = {}
@@ -154,10 +161,10 @@ def card_for(session: Session, tr: TRSubmission, reference: ReferenceData, batch
             ref = SampleRef(tr_number=tr.tr_number, position=sample.position)
             chips.append(Chip(sample.position, analysis.name if analysis else f"Analysis #{analysis_id}",
                               state, batch_of.get((ref, analysis_id))))
-    return Card(tr, _column(tr, chips), chips, issued=bool(issues))
+    return Card(tr, _column(tr, chips, invoice), chips, issued=bool(issues), invoice=invoice)
 
 
-def _column(tr: TRSubmission, chips: list[Chip]) -> str:
+def _column(tr: TRSubmission, chips: list[Chip], invoice: TRInvoiceRow | None) -> str:
     match tr.status:
         case TRStatus.SUBMITTED:
             return "expected"
@@ -165,8 +172,8 @@ def _column(tr: TRSubmission, chips: list[Chip]) -> str:
             return "received"
         case TRStatus.COMPLETE_REPORT:
             return "to_invoice"
-        case TRStatus.INVOICED:
-            return "invoiced"
+        case TRStatus.INVOICED:  # invoiced by hand before invoices were recorded counts as sent
+            return "paid" if invoice is not None and invoice.paid_on is not None else "invoice_sent"
     if any(c.state == "released" for c in chips):
         return "ready_to_report"
     return "partial_report" if tr.status == TRStatus.PARTIAL_REPORT else "in_analysis"
@@ -184,17 +191,18 @@ def board(session: Session, user: User, reference: ReferenceData, *, customer_id
     for status in TRStatus:
         if status == TRStatus.CANCELLED:
             continue
-        limit = INVOICED_SHOWN if status == TRStatus.INVOICED else 500
-        trs = repo.list(customer_id=customer_id, status=status, per_page=limit).items  # newest first
+        trs = repo.list(customer_id=customer_id, status=status, per_page=500).items  # newest first
+        invoices = latest_invoices(session, [t.id for t in trs]) if status == TRStatus.INVOICED else {}
         for tr in reversed(trs):
             if analysis_id is not None and not any(analysis_id in s.analysis_ids for s in tr.samples):
                 continue
             if rush and not tr.is_rush:
                 continue
-            card = card_for(session, tr, reference, batch_of)
+            card = card_for(session, tr, reference, batch_of, invoices.get(tr.id))
             if mine and not card.needs(user.lab_role):
                 continue
             columns[card.column].append(card)
+    columns["paid"] = sorted(columns["paid"], key=lambda c: (c.invoice.paid_on, c.invoice.id))[-PAID_SHOWN:]
     if not user.is_staff:
         return [(key, title, [c for k in parts for c in columns[k]]) for key, title, parts in CUSTOMER_COLUMNS]
     return [(key, title, columns[key]) for key, title in COLUMNS]

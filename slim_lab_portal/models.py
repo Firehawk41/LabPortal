@@ -211,3 +211,20 @@ class AnalysisCatalogRow(Base):
     request_types: Mapped[str] = mapped_column(String(20))  # comma-separated RequestType values, e.g. "1,2"
     portal_selectable: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# ---------------------------------------------------------------- invoices (spec §13)
+# Stands in for the invoicing module until it is rewired to read SLIM: one row per invoice sent for a
+# TR, paid when the payment arrives. The invoicing program will write these instead of staff clicks.
+
+
+class TRInvoiceRow(Base):
+    __tablename__ = "tr_invoices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("tr_submissions.id", ondelete="CASCADE"), index=True)
+    sent_on: Mapped[date] = mapped_column(Date)
+    sent_by: Mapped[str] = mapped_column(String(254))
+    paid_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    paid_by: Mapped[str] = mapped_column(String(254), default="")
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

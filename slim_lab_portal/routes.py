@@ -11,13 +11,14 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from slim_lab_portal import board
+from slim_lab_portal import board, invoices
 from slim_lab_portal.api import Service, get_reference
 from slim_lab_portal.auth import CurrentUser, RequireStaff, RequireUser
 from slim_lab_portal.db import get_db
 from slim_lab_portal.domain import ActorType, RequestType, TRStatus, TRSubmission, allowed_next_statuses
 from slim_lab_portal.models import LAB_ROLE_ANALYST, LAB_ROLE_SUPERVISOR, LAB_ROLES, ROLE_CUSTOMER, ROLE_STAFF, User
 from slim_lab_portal.reference import ReferenceData
+from slim_lab_portal.results import issued_documents
 from slim_lab_portal.schemas import CheckInIn, ChemicalMatchIn, StatusChangeIn
 from slim_lab_portal.security import csrf_protect, hash_password
 from slim_lab_portal.services import Conflict, Forbidden, NotFound, SubmissionRejected
@@ -55,9 +56,44 @@ def index(request: Request, user: CurrentUser, db: DB, reference: Reference,
         "filters": filters,
         "customers": reference.customer_choices() if user.is_staff else [],
         "analyses": [reference.analysis(a) for a in analyses if reference.analysis(a)],
-        "invoiced_shown": board.INVOICED_SHOWN,
+        "paid_shown": board.PAID_SHOWN,
         "can_invoice": user.is_staff,
         "TRStatus": TRStatus,
+    })
+
+
+@router.post("/requests/{tr_number}/invoice", name="invoice_sent")
+def invoice_sent(request: Request, tr_number: str, user: RequireStaff, service: Service, db: DB):
+    return _invoice(request, db, lambda: invoices.mark_sent(db, service, tr_number, user), f"{tr_number}: invoice sent.")
+
+
+@router.post("/requests/{tr_number}/invoice/paid", name="invoice_paid")
+def invoice_paid(request: Request, tr_number: str, user: RequireStaff, service: Service, db: DB):
+    return _invoice(request, db, lambda: invoices.mark_paid(db, service, tr_number, user), f"{tr_number}: paid.")
+
+
+def _invoice(request: Request, db: Session, action, done: str) -> RedirectResponse:
+    try:
+        action()
+        db.commit()
+        flash(request, done)
+    except (Conflict, Forbidden, NotFound) as e:
+        db.rollback()
+        flash(request, str(e) or "Not found.", "error")
+    return _redirect(request, "index")
+
+
+@router.get("/requests/{tr_number}/reports", name="issued_reports")
+def issued_reports(request: Request, tr_number: str, user: RequireUser, service: Service, db: DB,
+                   reference: Reference):
+    """Every report issued for a TR, newest first, each exactly as it was issued (spec §13): rebuilt as
+    of its issue and checked against the hash recorded then (D-73). Customers see their own."""
+    try:
+        submission = service.get(tr_number, user)
+    except NotFound:
+        return render(request, "error.html", {"status": 404, "message": f"Testing Request {tr_number} not found."}, 404)
+    return render(request, "requests/reports.html", {
+        "s": submission, "reports": issued_documents(db, tr_number), "reference": reference,
     })
 
 
@@ -102,7 +138,6 @@ def change_status_form(
     note: Annotated[str, Form()] = "",
     date_received: Annotated[str, Form()] = "",
     received_by: Annotated[str, Form()] = "",
-    back_to_board: Annotated[str, Form()] = "",
 ):
     try:
         data = StatusChangeIn(
@@ -119,8 +154,6 @@ def change_status_form(
         flash(request, _first_error(e), "error")
     except NotFound:
         flash(request, f"Testing Request {tr_number} not found.", "error")
-        return _redirect(request, "index")
-    if back_to_board:  # "Mark invoiced" on the board returns there
         return _redirect(request, "index")
     return _redirect(request, "request_detail", tr_number=tr_number)
 

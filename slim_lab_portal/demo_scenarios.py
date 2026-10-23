@@ -5,7 +5,7 @@ gets a real TR (submitted and checked in by the supervisor persona, ordering its
 D-78: customer A's IPA, or customer B's when the scenario needs a spec; an assay is of HNO3), readings uploaded by
 the analyst persona and decisions by the reviewer and supervisor personas, so a first visitor
 already sees history. Afterwards each TR's status follows D-71: in progress once it has readings,
-partial or complete report once a report was issued.
+partial or complete report once a report was issued; one complete TR is then invoiced and one paid.
 
 Needs the demo personas (personas.py), the demo rules (results.publish_demo_rules) and the SLIM
 demo reference data. Runs once: skipped when any prep batch exists.
@@ -31,6 +31,7 @@ from slim_lab_portal.domain import (
     TRSubmission,
     transition,
 )
+from slim_lab_portal.invoices import mark_paid, mark_sent
 from slim_lab_portal.models import User
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
@@ -124,4 +125,8 @@ def seed_scenarios(session: Session, reference: ReferenceData, specs, now: datet
             complete = report_complete(report_view(session, tr_number), service.get(tr_number, sue))
             target = TRStatus.COMPLETE_REPORT if complete else TRStatus.PARTIAL_REPORT
             service.change_status(tr_number, StatusChangeIn(to_status=target, note=f"report issue {issues[-1].id}"), sue)
+    # The board's invoice columns (spec §13): one invoice sent, one paid.
+    mark_sent(session, service, trs["rerun_exception"], sue)
+    mark_sent(session, service, trs["clean_pass"], sue)
+    mark_paid(session, service, trs["clean_pass"], sue)
     return trs
