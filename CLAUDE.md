@@ -44,7 +44,9 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    JSON view. routes.py pages, templates/requests/*, admin/home + users, static/js/request_form.js
    (vanilla JS), static/css/portal.css, e2e/request_flow.js. Not done (parked): customer profiles
    (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request.
-7. ⏸ (D) Deeper connectivity with the other repos (report engine accepts a submission object,
+7. ◐ (D) Deeper connectivity with the other repos. Done: real reports (spec §13 "The report itself", slim-data
+   D-79): `reports.py` renders slim-report-engine's template as HTML filled with released results (MDL, not ±),
+   stored in `report_files`, issue hash = file hash. Still open (report engine accepts a submission object,
    slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
    repos — **needs the user's explicit go-ahead.** Includes: the report engine should print actual
    results from the DB instead of a blank report, generated once results exist ("data is in") —
@@ -134,6 +136,7 @@ slim_lab_portal/
 ├── auth.py          # current_user / require_user / require_staff deps; /login, /logout
 ├── board.py         # the lab board (spec §13): TR cards by stage, chips per sample × analysis
 ├── invoices.py      # invoice sent / paid per TR (tr_invoices) until the invoicing module writes them
+├── reports.py       # the issued report: engine_renderer (lab template as HTML) / plain_renderer, report_files
 ├── routes.py        # Pages: / (board), /requests (customer list), /requests/new|{tr}, status form, /admin, /admin/users
 ├── web.py           # Jinja2 templates, render(), flash()
 ├── audit.py         # slim-domain's audit log: install_audit_log (Postgres), chain_check for verify

@@ -1,6 +1,11 @@
 """slim-data's named demo scenarios on real portal TRs (slim-data D-75)."""
 
 import pytest
+
+from hashlib import sha256
+
+from slim_lab_portal import reports
+from slim_lab_portal.reports import plain_renderer
 from fastapi.testclient import TestClient
 from infrastructure import audit as slim_audit
 from slim_domain.domain.report_log.report_log_repository import _ReportGenerationLogRow
@@ -17,7 +22,7 @@ from slim_lab_portal.domain import RequestType, TRStatus
 from slim_lab_portal.personas import sync_personas
 from slim_lab_portal.reference import AnalysisRef, ChemicalRef, CustomerRef, ElementRef, StaticReferenceData
 from slim_lab_portal.repositories import TRSubmissionRepository
-from slim_lab_portal.results import document_sha256, publish_demo_rules, report_document
+from slim_lab_portal.results import publish_demo_rules
 from tests.conftest import make_settings, postgres_only
 
 ELEMENTS = {26: "Fe", 29: "Cu", 30: "Zn", 28: "Ni", 24: "Cr", 25: "Mn", 9: "F", 17: "Cl"}
@@ -50,7 +55,7 @@ def seeded(engine, db, reference):
         migrate.upgrade(connection)
     publish_demo_rules(db, reference)
     sync_personas(db)
-    trs = seed_scenarios(db, reference, specs)
+    trs = seed_scenarios(db, reference, specs, renderer=plain_renderer)
     db.commit()
     return trs
 
@@ -79,21 +84,24 @@ def test_results_and_issues_are_the_portals(db, seeded):
     assert report_view(db, seeded["cups_disagree"]).lines[0].shown_flags == ("ABOVE_SPEC",)
     issues = issues_for_tr(db, seeded["amended"])
     assert [i.amends for i in issues] == [None, issues[0].id]
-    # The last issue's hash is what "Issue report" would record for the report as it stands (D-73).
-    assert issues[-1].file_sha256 == document_sha256(report_document(report_view(db, seeded["amended"])))
+    # Each issue's hash is the stored report file's (slim-data D-79): served back exactly as issued.
+    for issue in issues:
+        html = reports.stored(db, issue.file_sha256)
+        assert html is not None and sha256(html.encode()).hexdigest() == issue.file_sha256
+    assert "(amended)" in reports.stored(db, issues[-1].file_sha256)
     analysts = {r.analyst_ids for r in batch_view(db, f"PB-{seeded['clean_pass'][2:]}").results}
     assert len(analysts) == 1  # the analyst persona (file analyst and uploader)
 
 
 def test_runs_once(db, seeded, reference):
-    assert seed_scenarios(db, reference, specs) == {}
+    assert seed_scenarios(db, reference, specs, renderer=plain_renderer) == {}
 
 
 def test_a_visitor_sees_the_history(engine, reference, seeded):
     from slim_lab_portal.main import create_app
 
     app = create_app(make_settings(str(engine.url), demo_personas=True), engine=engine, reference=reference,
-                     specs=specs)
+                     specs=specs, report_renderer=plain_renderer)
     with TestClient(app) as client:
         page = client.get("/demo/personas").text
         rob = page.split('name="user_id" value="')[2].split('"')[0]  # customer, ana, rob, sue
@@ -143,7 +151,7 @@ def test_on_postgres_the_scenarios_are_chained_and_verify_checks_the_chain(engin
     install_audit_log(engine)
     publish_demo_rules(db, reference)
     sync_personas(db)
-    seed_scenarios(db, reference, specs)
+    seed_scenarios(db, reference, specs, renderer=plain_renderer)
     db.commit()
     assert {"tr_submissions", "users"} <= set(audited)
     logged = db.execute(text("SELECT count(*) FROM audit_log WHERE table_name = 'result_versions'")).scalar()

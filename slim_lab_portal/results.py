@@ -42,6 +42,7 @@ from slim_data.service import workflow as wf
 from slim_data.service.views import ReportView, report_view
 from slim_data.service.workflow import EvaluationReceipt, evaluate_batch
 
+from slim_lab_portal import reports
 from slim_lab_portal import slim_tables as t
 from slim_lab_portal.domain import TRStatus
 from slim_lab_portal.models import ROLE_STAFF, TRSampleRow, TRSubmissionRow, User
@@ -262,6 +263,7 @@ def report_document(view: ReportView) -> dict:
                 "version": line.version, "text": line.text,
                 "unit": line.reported.unit if line.reported else None, "qualifier": line.qualifier.name,
                 "uncertainty": None if line.uncertainty is None else str(line.uncertainty),
+                "mdl": None if line.mdl is None else str(line.mdl),
                 "recovery": None if line.recovery is None else str(line.recovery),
                 "notes": list(line.notes), "shown_flags": list(line.shown_flags), "amended": line.amended,
             }
@@ -275,13 +277,19 @@ def document_sha256(document: dict) -> str:
 
 
 def issued_documents(session: Session, tr_number: str) -> list[dict]:
-    """Each issued report, newest first, as it was issued: the document rebuilt as of its issue (D-73),
-    with whether its hash still matches the one recorded then."""
+    """Each issued report, newest first, exactly as it was issued: the stored file, with whether it
+    still matches the hash the issue recorded (slim-data D-79). An issue from before files were kept
+    is rebuilt as of its issue and checked against its canonical-JSON hash instead (D-73)."""
     out = []
     for issue in reversed(issues_for_tr(session, tr_number)):
-        document = report_document(report_view(session, tr_number, as_of=issue.created_at))
-        out.append({"id": issue.id, "amends": issue.amends, "at": issue.created_at, "document": document,
-                    "verified": document_sha256(document) == issue.file_sha256})
+        entry = {"id": issue.id, "amends": issue.amends, "at": issue.created_at, "html": None, "document": None}
+        html = reports.stored(session, issue.file_sha256)
+        if html is not None:
+            entry.update(html=html, verified=sha256(html.encode()).hexdigest() == issue.file_sha256)
+        else:
+            document = report_document(report_view(session, tr_number, as_of=issue.created_at))
+            entry.update(document=document, verified=document_sha256(document) == issue.file_sha256)
+        out.append(entry)
     return out
 
 
@@ -293,16 +301,16 @@ def report_complete(view: ReportView, submission) -> bool:
     return not view.waiting and ordered <= reported
 
 
-def issue_report(session: Session, service, tr_number: str, user: User) -> dict:
-    """Records what the report shows now (every released result, latest versions) and moves the TR
-    to partial or complete report (D-71, D-73). A report carrying a corrected result amends the
-    latest issue. Raises NothingToIssue, or slim-data's WorkflowError."""
+def issue_report(session: Session, service, tr_number: str, user: User, renderer, reference: ReferenceData) -> dict:
+    """Renders the report as it stands now (every released result, latest versions), stores the file
+    and records the issue by its sha256 (D-73, slim-data D-79), then moves the TR to partial or
+    complete report (D-71). A report carrying a corrected result amends the latest issue. Raises
+    NothingToIssue, or slim-data's WorkflowError."""
     submission = service.get(tr_number, user)  # 404s an unknown TR
     view = report_view(session, tr_number)
     if not view.lines:
         raise NothingToIssue(f"{tr_number} has no released results to report")
-    document = report_document(view)
-    digest = document_sha256(document)
+    digest = reports.store(session, tr_number, renderer(session, submission, view, reference))
     previous = issues_for_tr(session, tr_number)
     if previous and previous[-1].file_sha256 == digest:
         raise NothingToIssue(f"nothing has changed since report issue {previous[-1].id}")

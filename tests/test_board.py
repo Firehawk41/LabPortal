@@ -7,6 +7,7 @@ from sqlalchemy import select
 from slim_lab_portal import board as b
 from slim_lab_portal.domain import TRStatus
 from slim_lab_portal.models import User
+from slim_lab_portal.reports import plain_renderer
 from slim_lab_portal.repositories import TRSubmissionRepository
 from tests.conftest import make_settings
 from tests.factories import sample, submission
@@ -57,7 +58,7 @@ def test_supervisor_board_has_every_action_and_records_invoice_and_payment(engin
     from slim_lab_portal.main import create_app
 
     app = create_app(make_settings(str(engine.url), demo_personas=True), engine=engine, reference=reference,
-                     specs=specs)
+                     specs=specs, report_renderer=plain_renderer)
     sue = str(persona(db, "sue@demo.example").id)
     db.rollback()  # end this session's read: SQLite would lock the app's write
     with TestClient(app) as client:
@@ -83,7 +84,7 @@ def test_customers_see_their_own_requests_in_plain_columns(engine, db, seeded, r
     from slim_lab_portal.main import create_app
 
     app = create_app(make_settings(str(engine.url), demo_personas=True), engine=engine, reference=reference,
-                     specs=specs)
+                     specs=specs, report_renderer=plain_renderer)
     customer = db.scalars(select(User).where(User.is_persona.is_(True), User.customer_id.is_not(None))).one()
     columns = b.board(db, customer, reference)
     assert [title for _, title, _ in columns] == ["Not arrived yet", "At the lab", "Results published",

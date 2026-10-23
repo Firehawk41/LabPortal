@@ -2,6 +2,7 @@
 
 {% block title %}Report {{ r.tr_number }} — YourLab{% endblock %}
 {% block body_class %}page-wide{% endblock %}
+{% block extra_head %}<link href="{{ url_for('static', path='css/report.css') }}" rel="stylesheet" />{% endblock %}
 
 {% block content %}
   <div class="page-head">
@@ -14,7 +15,7 @@
     <table class="table">
       <thead><tr>
         <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th><th scope="col">Result</th>
-        <th scope="col">Unit</th><th scope="col">±</th><th scope="col">Recovery</th><th scope="col">Notes</th>
+        <th scope="col">Unit</th><th scope="col">MDL</th><th scope="col">Recovery</th><th scope="col">Notes</th>
       </tr></thead>
       <tbody>
         {% for line in r.lines %}
@@ -22,7 +23,7 @@
           <tr>
             <td>{{ line.sample }}</td><td>{{ analysis.name if analysis else line.analysis_id }}</td>
             <td>{{ line.analyte }}</td><td>{{ line.text }}</td><td>{{ line.unit or "" }}</td>
-            <td>{{ line.uncertainty or "N/A" }}</td><td>{{ line.recovery or "" }}</td>
+            <td>{{ line.mdl or "" }}</td><td>{{ line.recovery or "" }}</td>
             <td>{{ (line.notes + line.shown_flags)|join("; ") }}{% if line.amended %}{{ "; " if line.notes or line.shown_flags }}Amended{% endif %}</td>
           </tr>
         {% endfor %}
@@ -30,6 +31,13 @@
     </table>
   {% else %}
     <p class="muted">No released results yet.</p>
+  {% endif %}
+
+  {% if r.html %}
+    <section class="form-section" aria-labelledby="preview-heading">
+      <h2 id="preview-heading">What the customer will get</h2>
+      <div class="report-paper">{{ r.html|safe }}</div>
+    </section>
   {% endif %}
 
   {% if r.waiting %}

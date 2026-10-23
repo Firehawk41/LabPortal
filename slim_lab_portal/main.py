@@ -16,6 +16,7 @@ from slim_lab_portal.config import Settings, load_settings
 from slim_lab_portal.db import make_engine, make_session_factory
 from slim_lab_portal.reference import ReferenceData
 from slim_lab_portal.reference_cache import ReferenceCache
+from slim_lab_portal.reports import engine_renderer
 from slim_lab_portal.results import SpecReader
 from slim_lab_portal.results_routes import api_router as results_api_router
 from slim_lab_portal.results_routes import router as results_router
@@ -35,6 +36,7 @@ def create_app(
     engine=None,
     reference: ReferenceData | None = None,
     specs=None,
+    report_renderer=None,
 ) -> FastAPI:
     settings = settings or load_settings()
     engine = engine or make_engine(settings.database_url)
@@ -57,6 +59,7 @@ def create_app(
     app.state.reference = reference
     # SLIM spec limits for slim-data: (customer_id, chemical_id, location) -> {element: limit}.
     app.state.specs = specs or SpecReader(slim_engine)
+    app.state.report_renderer = report_renderer or engine_renderer  # spec §13, slim-data D-79
 
     # Last added = outermost. Headers wrap everything, including 413s and session errors.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
