@@ -12,3 +12,4 @@ screenshots/
 .pytest_cache/
 *.egg-info/
 .venv/
+vendor/

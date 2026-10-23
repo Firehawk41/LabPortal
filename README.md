@@ -1,5 +1,7 @@
 # slim-lab-portal
 
+[![CI](https://github.com/Firehawk41/LabPortal/actions/workflows/ci.yml/badge.svg)](https://github.com/Firehawk41/LabPortal/actions/workflows/ci.yml)
+
 The sample submission portal for the **SLIM** LIMS ecosystem
 ([slim-domain](https://github.com/Firehawk41/slim-domain-oss),
 [slim-report-engine](https://github.com/Firehawk41/slim-report-engine-oss),
@@ -78,6 +80,20 @@ Run the tests with `pytest`; `e2e/request_flow.js` is a Playwright run-through o
 With Docker (Postgres shared the way the SLIM ecosystem shares it; expects the OSS repos next to
 this one): `docker compose up --build`, then create a staff user with
 `docker compose exec portal python -m slim_lab_portal.cli create-staff ...`.
+
+## Cloud demo (Render)
+
+`render.yaml` is a Render Blueprint: a free Postgres plus the portal. Each start runs the demo seed
+(migrations, the audit log, SLIM's fictional reference data, the demo ruleset, personas and the nine
+result scenarios; each step is skipped once it's done), then serves the app with personas on. Go to
+**New → Blueprint** in Render, pick this repo, and open `/demo/personas` on the URL it gives you.
+On the free plan the app sleeps when idle (the first visit takes about a minute) and the free
+database expires after a while: recreate it and the next start seeds it again.
+
+## Tests
+
+`pytest` (SQLite), or `TEST_DATABASE_URL=postgresql+psycopg2://... pytest` (Postgres). CI runs both
+on Python 3.11 and 3.12, with slim-data, slim-domain and the report engine installed from GitHub.
 
 ## Security
 

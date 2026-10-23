@@ -40,9 +40,11 @@ def _bool(value: str | None, default: bool) -> bool:
 
 
 def _database_url(raw: str) -> str:
-    # Render and Heroku hand out postgres:// URLs; SQLAlchemy 2 only accepts postgresql://.
-    if raw.startswith("postgres://"):
-        return "postgresql+psycopg2://" + raw.removeprefix("postgres://")
+    # Render and Heroku hand out postgres:// or postgresql:// URLs with no driver; SQLAlchemy 2 refuses
+    # the first and may pick psycopg 3 for the second. The portal ships psycopg2, so name it.
+    for scheme in ("postgres://", "postgresql://"):
+        if raw.startswith(scheme):
+            return "postgresql+psycopg2://" + raw.removeprefix(scheme)
     return raw
 
 
