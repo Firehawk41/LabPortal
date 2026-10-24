@@ -46,7 +46,8 @@ history (`main` before the rebuild) — e.g. `git show main:app/templates/form.h
    (saved defaults, SX5-style locations) — the form pre-fills from the customer's last request.
 7. ◐ (D) Deeper connectivity with the other repos. Done: real reports (spec §13 "The report itself", slim-data
    D-79): `reports.py` renders slim-report-engine's template as HTML filled with released results (MDL, not ±),
-   stored in `report_files`, issue hash = file hash. Still open (report engine accepts a submission object,
+   stored in `report_files`, issue hash = file hash; ½Δ only near a spec + a key (D-80); the batch page shows
+   every cup and links each result's trace (D-81). Still open (report engine accepts a submission object,
    slim-lims "generate report for TR", slim-domain adopts v2, status flows back). Modifies other
    repos — **needs the user's explicit go-ahead.** Includes: the report engine should print actual
    results from the DB instead of a blank report, generated once results exist ("data is in") —
@@ -128,7 +129,7 @@ slim_lab_portal/
 ├── data/analysis_catalog.csv  # Spec §8 code/group/request-type table
 ├── bridge.py        # to_slim_v1: portal TR -> slim-domain-oss v1 TRSubmission (location/TR no. in file_name)
 ├── results.py       # slim-data host side: TrSampleTables, SpecReader, StaffDirectory, actor_for, demo rules
-├── results_routes.py  # /results (upload, batches, reports) and /api/results — staff only
+├── results_routes.py  # /results (upload, batches with every cup, trace, reports) and /api/results — staff only
 ├── personas.py      # demo personas (DEMO_PERSONAS): data/demo_personas.csv -> users.is_persona rows
 ├── demo_scenarios.py  # slim-data's demo scenarios on real TRs (PortalDemoHost, seed_scenarios); demo seed only
 ├── api.py           # /api/submissions JSON API; maps service errors to 422/403/404/409

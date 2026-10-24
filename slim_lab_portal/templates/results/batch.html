@@ -55,10 +55,14 @@
   {% endif %}
 
   {% if view.results %}
+    <p class="hint">Cups are dilution-corrected. Red: the cups disagreed and the engine believed one of them.
+      Click a result for every step the engine took.</p>
     <table class="table">
       <thead><tr>
-        <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th><th scope="col">Result</th>
-        <th scope="col">Verdict</th><th scope="col">Status</th><th scope="col">Version</th><th scope="col">Flags</th>
+        <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th>
+        <th scope="col">Cups</th><th scope="col">Believed</th><th scope="col">Recovery</th><th scope="col">Blank</th>
+        <th scope="col">MDL / QL</th><th scope="col" title="half the difference between the two cups">½Δ</th>
+        <th scope="col">Result</th><th scope="col">Verdict</th><th scope="col">Status</th><th scope="col">Version</th><th scope="col">Flags</th>
         <th scope="col">Actions</th>
       </tr></thead>
       <tbody>
@@ -68,7 +72,14 @@
             <td><a href="{{ url_for('request_detail', tr_number=r.sample.tr_number) }}">{{ r.sample }}</a></td>
             <td>{{ analysis.name if analysis else r.analyte.analysis_id }}</td>
             <td>{{ r.analyte.code }}</td>
-            <td>{{ r.text }}</td>
+            {% set c = r.cups %}
+            <td class="cups{{ ' cups--disagree' if c.agree == false }}">{{ c.cups|join(" / ") }}</td>
+            <td>{% if c.chosen %}cup {{ c.chosen }} · {{ c.why.replace("_", " ") }}{% elif c.agree %}mean{% elif c.why %}{{ c.why.replace("_", " ") }}{% endif %}</td>
+            <td>{% if c.recovery is not none %}{{ (c.recovery * 100)|round|int }}%{% if c.recovery_basis and c.recovery_basis != "own" %} ({{ c.recovery_basis.replace("_", " ") }}){% endif %}{% endif %}</td>
+            <td>{{ c.blank or "" }}</td>
+            <td class="cups">{{ c.mdl or "" }}{% if c.ql %} / {{ c.ql }}{% endif %}</td>
+            <td>{{ c.half_delta or "" }}</td>
+            <td><a href="{{ url_for('results_trace', code=view.code) }}?sample={{ r.sample|string|urlencode }}&amp;analysis_id={{ r.analyte.analysis_id }}&amp;analyte={{ r.analyte.code|urlencode }}" title="every step the engine took">{{ r.text }}</a></td>
             <td>{{ r.verdict.name.replace("_", " ").lower() }}</td>
             <td>{{ r.status.name.lower() }}{% if r.rerun_requested %} · rerun requested{% endif %}{% if r.correction_started %} · correcting{% endif %}</td>
             <td>v{{ r.version }}</td>

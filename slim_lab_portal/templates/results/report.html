@@ -15,7 +15,7 @@
     <table class="table">
       <thead><tr>
         <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th><th scope="col">Result</th>
-        <th scope="col">Unit</th><th scope="col">MDL</th><th scope="col">Recovery</th><th scope="col">Notes</th>
+        <th scope="col">Unit</th><th scope="col">MDL</th><th scope="col" title="half the difference between the two cups">½Δ</th><th scope="col">Recovery</th><th scope="col">Notes</th>
       </tr></thead>
       <tbody>
         {% for line in r.lines %}
@@ -23,7 +23,7 @@
           <tr>
             <td>{{ line.sample }}</td><td>{{ analysis.name if analysis else line.analysis_id }}</td>
             <td>{{ line.analyte }}</td><td>{{ line.text }}</td><td>{{ line.unit or "" }}</td>
-            <td>{{ line.mdl or "" }}</td><td>{{ line.recovery or "" }}</td>
+            <td>{{ line.mdl or "" }}</td><td>{{ line.uncertainty or "" }}</td><td>{{ line.recovery or "" }}</td>
             <td>{{ (line.notes + line.shown_flags)|join("; ") }}{% if line.amended %}{{ "; " if line.notes or line.shown_flags }}Amended{% endif %}</td>
           </tr>
         {% endfor %}

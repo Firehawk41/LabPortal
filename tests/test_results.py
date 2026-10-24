@@ -416,6 +416,22 @@ def test_batch_page_actions(app, lab):
         assert "Re-evaluated: 0 new version(s)" in reevaluated.text
 
 
+def test_batch_page_shows_every_cup_and_links_to_the_trace(app, lab):
+    """slim-data D-81: the cups, what was believed and the QC numbers, beside the actions."""
+    with staff_api(app, "AN") as an:
+        upload(an, csv())
+        page = an.get("/results/batches/PB-1").text
+        assert "10.10 / 10.00" in page and "<td>mean</td>" in page and ">½Δ<" in page
+        assert "0.050 / 0.167" in page and "<td>0.010</td>" in page  # MDL / QL, blank
+        trace = an.get("/results/batches/PB-1/trace", params={"sample": "TR00001-01", "analysis_id": TEN,
+                                                              "analyte": "Fe"})
+        assert trace.status_code == 200 and "agreement@1" in trace.text and "cup 1: 10.10" in trace.text
+        assert "uncertainty@1" in trace.text and "half delta: 0.05" in trace.text
+        for bad in ({"version": 9}, {"sample": "nonsense"}, {"analyte": "Zz"}):
+            params = {"sample": "TR00001-01", "analysis_id": TEN, "analyte": "Fe", **bad}
+            assert an.get("/results/batches/PB-1/trace", params=params).status_code == 404
+
+
 def test_accept_offers_the_policys_categories(app, lab):
     with staff_api(app, "AN") as an:
         upload(an, csv(mdl_2=""))

@@ -25,6 +25,10 @@
 .slim-report td.below-mdl { color: #1f4fbf; }
 .slim-report__notes { margin-top: 1rem; }
 .slim-report__notes h2 { font-size: 1rem; }
+.slim-report__key { margin-top: 1rem; font-size: 0.9em; }
+.slim-report__key h2 { font-size: 1rem; }
+.slim-report__key dt { font-weight: 600; }
+.slim-report__key dd { margin: 0 0 0.4em 0; }
 @media print {
   .site-header, .site-footer, .page-head, .flash, .muted, .badge { display: none; }
   .report-paper { border: 0; padding: 0; }

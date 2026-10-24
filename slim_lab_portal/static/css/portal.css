@@ -157,3 +157,9 @@ kbd { font-family: inherit; border: 1px solid var(--color-border); border-radius
 .chip--released { border-left-color: #3182CE; }
 .chip--reported { border-left-color: #2F855A; }
 .filters .check { display: inline-flex; flex-direction: row; gap: 0.3rem; align-items: center; align-self: flex-end; padding-bottom: 0.5rem; }
+/* the batch page's cups (slim-data D-81) */
+.cups { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cups--disagree { color: #C53030; font-weight: 600; }
+.trace-steps dt { font-weight: 600; margin-top: 0.8em; }
+.trace-steps dd { margin: 0.2em 0 0 0; }
+.trace-steps dd span { display: inline-block; margin-right: 1.2em; }
