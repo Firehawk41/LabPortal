@@ -475,6 +475,8 @@ The portal is a portfolio demo: modular but narrow. These came up and are delibe
   improvement over Excel for customers who send the same panel regularly.
 - Upload sample IDs from a CSV/XLSX column (beyond pasting).
 - Login rate limiting; SRI hashes / self-hosted CDN assets; file attachments; email notifications.
+- Quality layer: pooled precision per element and matrix (steadier than one sample's ½Δ), control charts
+  and trends across batches (slim-data D-81 leaves these out).
 
 ## 12. Integration contract: portal ↔ slim-lims
 
@@ -546,7 +548,8 @@ reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templa
   Half delta (½Δ, half the difference between the two cups; slim-data D-80) is printed only beside a
   spec limit it bears on: the result is outside it, or within ½Δ of it ("above the customer's
   specification; half delta 0.100"). The report ends with a key explaining MDL, QL and half delta,
-  whichever it prints. Staff screens label it ½Δ and always show it.
+  whichever it prints, and the decision rule (simple acceptance; ½Δ is for information, ISO 17025
+  §7.1.3) wherever it compares a result with a spec. Staff screens label it ½Δ and always show it.
 - **The cups** (slim-data D-81): the batch page shows, per result, the dilution-corrected cups (red
   when they disagreed), the cup believed and why, recovery and its basis, blank, MDL / QL and ½Δ,
   beside the actions that override it. Each result links to its trace page

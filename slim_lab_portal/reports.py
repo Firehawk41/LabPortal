@@ -67,14 +67,18 @@ _TERMS = {
     "QL": "Quantitation limit: the lowest concentration the method measures with acceptable precision.",
     "Half delta": "Half the difference between the two measurements of the sample. Shown only where a "
                   "result is outside your specification, or close enough to it for this difference to matter.",
+    "Decision rule": "Simple acceptance: a result meets your specification when its reported value is "
+                     "within the limit. Half delta is given for information and does not change that.",
 }
 
 
 def _key(view: ReportView, columns: set[str]) -> str:
-    """Explains every term the report uses (slim-data D-80): the limit columns it prints, and half delta."""
+    """Explains every term the report uses (slim-data D-80): the limit columns it prints, half delta, and the
+    decision rule wherever the report says how a result stands against a spec (ISO 17025 §7.1.3)."""
     used = {"MDL": "MDL" in columns and any(line.mdl for line in view.lines),
             "QL": "QL" in columns and any(line.ql for line in view.lines),
-            "Half delta": any(line.half_delta is not None for line in view.lines)}
+            "Half delta": any(line.half_delta is not None for line in view.lines),
+            "Decision rule": any(line.shown_flags or line.half_delta is not None for line in view.lines)}
     items = "".join(f"<dt>{term}</dt><dd>{escape(_TERMS[term])}</dd>" for term, on in used.items() if on)
     return f'<section class="slim-report__key"><h2>Key</h2><dl>{items}</dl></section>' if items else ""
 

@@ -81,7 +81,7 @@ def test_the_lab_template_carries_the_released_results_and_mdl(issued):
     assert "value" not in row(clean, "Pb")  # not measured: blank, as on the template
     assert sha256(clean.encode()).hexdigest() == hashes["clean_pass"][0]
     assert "<dt>MDL</dt>" in clean and "<dt>QL</dt>" not in clean  # the key explains what is printed (D-80)
-    assert "half delta" not in clean.lower()  # no spec on this TR: no ½Δ
+    assert "half delta" not in clean.lower() and "Decision rule" not in clean  # no spec on this TR
 
 
 def test_anions_print_the_ql_and_below_mdl_in_blue(issued):
@@ -97,6 +97,7 @@ def test_half_delta_is_printed_beside_the_spec_it_bears_on(issued):
     files, _ = issued
     report = files["cups_disagree"][0]  # Fe 0.295 against B's 0.3 IPA spec (slim-data D-80)
     assert "Fe: close to the customer&#x27;s specification; half delta 0.010" in report and "<dt>Half delta</dt>" in report
+    assert "<dt>Decision rule</dt><dd>Simple acceptance" in report
 
 
 def test_the_assay_report_and_its_amendment(issued):
