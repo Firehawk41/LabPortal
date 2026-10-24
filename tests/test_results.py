@@ -3,6 +3,8 @@
 from datetime import date
 
 import pytest
+
+from slim_lab_portal.reports import plain_renderer
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -64,7 +66,8 @@ def app(engine, reference):
         migrate.downgrade(connection)
         migrate.upgrade(connection)
     return create_app(make_settings(str(engine.url)), engine=engine, reference=reference,
-                      specs=lambda customer, chemical, location: SPECS.get((customer, chemical, location), {}))
+                      specs=lambda customer, chemical, location: SPECS.get((customer, chemical, location), {}),
+                      report_renderer=plain_renderer)
 
 
 @pytest.fixture

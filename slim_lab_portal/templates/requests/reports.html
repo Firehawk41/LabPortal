@@ -2,6 +2,7 @@
 
 {% block title %}Reports {{ s.tr_number }} — YourLab{% endblock %}
 {% block body_class %}page-wide{% endblock %}
+{% block extra_head %}<link href="{{ url_for('static', path='css/report.css') }}" rel="stylesheet" />{% endblock %}
 
 {% block content %}
   <div class="page-head">
@@ -16,6 +17,9 @@
         {% if loop.first %}<span class="badge badge--complete_report">latest</span>{% else %}<span class="badge badge--submitted">superseded</span>{% endif %}</h2>
       <p class="muted">Issued {{ r.at.strftime("%Y-%m-%d %H:%M UTC") if r.at else "" }}
         {% if r.verified %}· verified: matches what was issued{% else %}<strong>· does not match the recorded hash</strong>{% endif %}</p>
+      {% if r.html %}
+        <div class="report-paper">{{ r.html|safe }}</div>
+      {% else %}
       <table class="table">
         <thead><tr>
           <th scope="col">Sample</th><th scope="col">Analysis</th><th scope="col">Analyte</th><th scope="col">Result</th>
@@ -33,6 +37,7 @@
           {% endfor %}
         </tbody>
       </table>
+      {% endif %}
     </section>
   {% else %}
     <p class="muted">No report has been issued yet.</p>

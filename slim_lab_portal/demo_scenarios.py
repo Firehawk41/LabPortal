@@ -34,15 +34,14 @@ from slim_lab_portal.domain import (
 from slim_lab_portal.invoices import mark_paid, mark_sent
 from slim_lab_portal.models import User
 from slim_lab_portal.reference import ReferenceData
+from slim_lab_portal.reports import engine_renderer, store
 from slim_lab_portal.repositories import TRSubmissionRepository
 from slim_lab_portal.results import (
     StaffDirectory,
     actor_for,
     demo_analyses,
-    document_sha256,
     reference_lookup,
     report_complete,
-    report_document,
     start_work,
 )
 from slim_lab_portal.schemas import StatusChangeIn
@@ -55,8 +54,8 @@ PERSONAS = {"analyst": "ana@demo.example", "reviewer": "rob@demo.example", "supe
 
 
 class PortalDemoHost:
-    def __init__(self, session: Session, reference: ReferenceData, specs, today: date) -> None:
-        self.session, self.reference, self.today = session, reference, today
+    def __init__(self, session: Session, reference: ReferenceData, specs, today: date, renderer=engine_renderer) -> None:
+        self.session, self.reference, self.today, self.renderer = session, reference, today, renderer
         self.analyses = demo_analyses(reference)
         self._assay_id = self.analyses["assay"][1]
         people = {role: session.scalars(select(User).where(User.email == email, User.is_persona.is_(True))).first()
@@ -104,17 +103,20 @@ class PortalDemoHost:
         return self.repo.record_transition(submission, received).tr_number
 
     def report_sha256(self, session: Session, tr_number: str, lines) -> str:
-        # What "Issue report" would record (D-73): the scenarios report every released result.
-        return document_sha256(report_document(report_view(session, tr_number)))
+        # What "Issue report" would record (slim-data D-79): the rendered report, stored; the
+        # scenarios report every released result.
+        submission = self.repo.get_by_tr_number(tr_number)
+        return store(session, tr_number, self.renderer(session, submission, report_view(session, tr_number), self.reference))
 
 
-def seed_scenarios(session: Session, reference: ReferenceData, specs, now: datetime | None = None) -> dict[str, str]:
+def seed_scenarios(session: Session, reference: ReferenceData, specs, now: datetime | None = None,
+                   renderer=engine_renderer) -> dict[str, str]:
     """Runs slim-data's scenarios on the portal and settles each TR's status; returns scenario ->
     TR number, or {} when results exist already. The caller commits."""
     if batches(session):
         return {}
     now = now or datetime.now(timezone.utc)
-    host = PortalDemoHost(session, reference, specs, now.date())
+    host = PortalDemoHost(session, reference, specs, now.date(), renderer)
     trs = run_scenarios(session, host, now)
     service = SubmissionService(TRSubmissionRepository(session), reference)
     sue = host.users["supervisor"]

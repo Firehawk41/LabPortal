@@ -228,3 +228,16 @@ class TRInvoiceRow(Base):
     paid_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     paid_by: Mapped[str] = mapped_column(String(254), default="")
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class ReportFileRow(Base):
+    """An issued report's file (spec §13, slim-data D-79): the HTML exactly as issued, by its sha256 --
+    the hash slim-data's report issue records."""
+
+    __tablename__ = "report_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tr_number: Mapped[str] = mapped_column(String(20), index=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    html: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

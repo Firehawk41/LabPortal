@@ -536,3 +536,10 @@ reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templa
   Rejected: a PAID status (puts accounting in the TR lifecycle; breaks when one invoice covers several
   TRs or a TR is billed twice).
 - The old request list stays (`/admin` for staff, `/requests` for customers).
+- **The report itself** (D, first part; slim-data D-79): "Issue report" renders an HTML document
+  with slim-report-engine's own template (lab header, a sheet per sample, a section per analysis, a
+  row per analyte) filled with the released results under Results / Recovery / MDL (QL on ion
+  panels): the MDL, not ±. It is stored (`report_files`) and the issue records its sha256, so the
+  Reports page serves each issue byte for byte and re-checks the hash. Staff see "What the customer
+  will get" before issuing. HTML now; PDF later. `reports.py`: `engine_renderer` (the app),
+  `plain_renderer` (tests without SLIM's report tables).

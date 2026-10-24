@@ -19,6 +19,7 @@ doesn't allow (role, four-eyes, state) -> 409; a missing reason or a category th
 list -> 422; unknown batch/result -> 404.
 """
 
+from hashlib import sha256
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -150,16 +151,19 @@ def _decide(db: Session, action) -> tuple[int, dict[str, Any]]:
     return 200, body
 
 
-def _report(db: Session, service, tr_number: str, user) -> dict[str, Any]:
-    """The report as it stands now, and every issue so far (raises the portal's NotFound)."""
+def _report(db: Session, service, tr_number: str, user, renderer, reference) -> dict[str, Any]:
+    """The report as it stands now, rendered as "Issue report" would issue it, and every issue so
+    far (raises the portal's NotFound)."""
     submission = service.get(tr_number, user)
     view = report_view(db, tr_number)
     document = report_document(view)
+    html = renderer(db, submission, view, reference) if view.lines else None
     return {
         **document,
         "waiting": list(view.waiting),
         "complete": report_complete(view, submission),
-        "sha256": document_sha256(document) if view.lines else None,
+        "sha256": sha256(html.encode()).hexdigest() if html else None,
+        "html": html,
         "issues": [
             {"id": i.id, "sha256": i.file_sha256, "amends": i.amends, "lines": len(i.lines),
              "by": i.created_by.display, "at": i.created_at.isoformat() if i.created_at else None}
@@ -392,15 +396,15 @@ def api_reason_categories(user: RequireStaff, db: DB):
 def results_report(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service,
                    reference: Reference):
     try:
-        report = _report(db, service, tr_number, user)
+        report = _report(db, service, tr_number, user, request.app.state.report_renderer, reference)
     except TRNotFound:
         return render(request, "error.html", {"status": 404, "message": f"Testing Request {tr_number} not found."}, 404)
     return render(request, "results/report.html", {"r": report, "reference": reference})
 
 
 @router.post("/results/reports/{tr_number}/issue", name="results_issue")
-def results_issue(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service):
-    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user))
+def results_issue(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service, reference: Reference):
+    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user, request.app.state.report_renderer, reference))
     if status == 200:
         amended = f" (amends issue {body['amends']})" if body["amended"] else ""
         flash(request, f"Report issue {body['issue_id']} recorded{amended}: {body['lines']} result(s).")
@@ -410,14 +414,16 @@ def results_issue(request: Request, tr_number: str, user: RequireStaff, db: DB, 
 
 
 @api_router.get("/reports/{tr_number}", summary="The report as it stands (released results) and its issues")
-def api_report(tr_number: str, user: RequireStaff, db: DB, service: Service):
+def api_report(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service, reference: Reference):
     try:
-        return _report(db, service, tr_number, user)
+        report = _report(db, service, tr_number, user, request.app.state.report_renderer, reference)
+        report.pop("html")  # the API gives the facts; the page shows the rendered report
+        return report
     except TRNotFound:
         raise HTTPException(status_code=404, detail=f"Testing Request {tr_number} not found.") from None
 
 
 @api_router.post("/reports/{tr_number}/issue", summary="Record a report issue; moves the TR to partial / complete report")
-def api_issue(tr_number: str, user: RequireStaff, db: DB, service: Service):
-    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user))
+def api_issue(request: Request, tr_number: str, user: RequireStaff, db: DB, service: Service, reference: Reference):
+    status, body = _decide(db, lambda: issue_report(db, service, tr_number, user, request.app.state.report_renderer, reference))
     return JSONResponse(body, status_code=201 if status == 200 else status)
