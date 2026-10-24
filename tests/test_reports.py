@@ -4,8 +4,10 @@ Skipped without the slim-report-engine-oss checkout (its demo seed), like the br
 
 import importlib.util
 import sys
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,7 +24,10 @@ from slim_lab_portal.personas import sync_personas  # noqa: E402
 from slim_lab_portal.reference_cache import load_reference  # noqa: E402
 from slim_lab_portal.repositories import TRSubmissionRepository  # noqa: E402
 from slim_lab_portal.results import SpecReader, publish_demo_rules  # noqa: E402
-from slim_data.service.views import report_view  # noqa: E402
+from slim_data.domain.enums import Qualifier  # noqa: E402
+from slim_data.domain.values import AnalyteRef, SampleRef  # noqa: E402
+from slim_data.service.views import ReportLineView, ReportView, report_view  # noqa: E402
+from slim_lab_portal.reports import plain_renderer  # noqa: E402
 
 OSS_DEMO = Path(__file__).resolve().parents[2] / "slim-report-engine-oss" / "demo" / "demo.py"
 
@@ -74,6 +79,8 @@ def test_the_lab_template_carries_the_released_results_and_mdl(issued):
     assert '<td class="c6 value">0.050</td>' in cu  # the MDL, not ±0.100 (D-79)
     assert "value" not in row(clean, "Pb")  # not measured: blank, as on the template
     assert sha256(clean.encode()).hexdigest() == hashes["clean_pass"][0]
+    assert "<dt>MDL</dt>" in clean and "<dt>QL</dt>" not in clean  # the key explains what is printed (D-80)
+    assert "half delta" not in clean.lower()  # no spec on this TR: no ½Δ
 
 
 def test_anions_print_the_ql_and_below_mdl_in_blue(issued):
@@ -82,6 +89,7 @@ def test_anions_print_the_ql_and_below_mdl_in_blue(issued):
     assert 'href="#sheet-2"' in anions
     f = row(anions, "F")
     assert "&lt; 0.050" in f and "below-mdl" in f and '<td class="c6 value below-mdl">0.167</td>' in f
+    assert "<dt>QL</dt>" in anions and "<dt>MDL</dt>" not in anions  # the ion panels print the QL
 
 
 def test_the_assay_report_and_its_amendment(issued):
@@ -90,3 +98,17 @@ def test_the_assay_report_and_its_amendment(issued):
     assert '<td class="c4 value">69.74</td>' in first and "(amended)" not in first
     assert '<td class="c4 value">69.55</td>' in amended and "Results report TR00008 (amended)" in amended
     assert "Amended: corrects a result reported before" in amended
+
+
+def test_half_delta_is_noted_beside_the_spec_and_explained():
+    """slim-data D-80: a line carries ½Δ only near a spec limit; the report then says what it is."""
+    line = ReportLineView(
+        sample=SampleRef(tr_number="TR00001", position=1), analyte=AnalyteRef(analysis_id=5, code="Fe"),
+        version=1, text="10.050", reported=None, qualifier=Qualifier.DETECTED, uncertainty=Decimal("0.050"),
+        recovery=None, mdl=Decimal("0.050"), half_delta=Decimal("0.050"), shown_flags=("ABOVE_SPEC",),
+    )
+    html = plain_renderer(None, SimpleNamespace(tr_number="TR00001"), ReportView(tr_number="TR00001", lines=(line,)),
+                          SimpleNamespace(analysis=lambda _id: None))
+    assert "Fe: above the customer&#x27;s specification; half delta 0.050" in html
+    assert "<dt>Half delta</dt><dd>Half the difference between the two measurements" in html
+    assert "<dt>MDL</dt>" in html

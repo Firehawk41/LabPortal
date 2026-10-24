@@ -543,3 +543,11 @@ reported and what is waiting to be invoiced. `slim_lab_portal/board.py`, `templa
   Reports page serves each issue byte for byte and re-checks the hash. Staff see "What the customer
   will get" before issuing. HTML now; PDF later. `reports.py`: `engine_renderer` (the app),
   `plain_renderer` (tests without SLIM's report tables).
+  Half delta (½Δ, half the difference between the two cups; slim-data D-80) is printed only beside a
+  spec limit it bears on: the result is outside it, or within ½Δ of it ("above the customer's
+  specification; half delta 0.100"). The report ends with a key explaining MDL, QL and half delta,
+  whichever it prints. Staff screens label it ½Δ and always show it.
+- **The cups** (slim-data D-81): the batch page shows, per result, the dilution-corrected cups (red
+  when they disagreed), the cup believed and why, recovery and its basis, blank, MDL / QL and ½Δ,
+  beside the actions that override it. Each result links to its trace page
+  (`/results/batches/{code}/trace`): versions, flags, every engine step, and who did what.

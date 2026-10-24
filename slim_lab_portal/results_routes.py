@@ -1,7 +1,9 @@
 """Staff pages and JSON API for analytical results (slim-data, D-70). Staff only.
 
     /results                      upload a result file (preview or import) and list prep batches
-    /results/batches/{code}       a batch's results as they stand, with the actions on them
+    /results/batches/{code}       a batch's results as they stand: every cup, what was believed, the
+                                  QC numbers (slim-data D-81), and the actions on them
+    /results/batches/{code}/trace ?sample&analysis_id&analyte[&version]: every step the engine took
     POST /api/results/imports     multipart `file`; `?preview=true` checks without writing
     GET  /api/results/batches[/{code}]
     POST /api/results/batches/{code}/review | /re-evaluate
@@ -35,7 +37,7 @@ from slim_data.domain.workflow import UnknownCategory, WorkflowError
 from slim_data.persistence.rulesets import current_policy
 from slim_data.service import workflow as wf
 from slim_data.service.imports import ImportPlan, ImportRefused, preview_import
-from slim_data.persistence.results import issues_for_tr
+from slim_data.persistence.results import issues_for_tr, load_result
 from slim_data.service.views import batch_view, batches, report_view
 
 from slim_lab_portal.api import Service, get_reference
@@ -272,6 +274,21 @@ def results_batch(request: Request, code: str, user: RequireStaff, db: DB, refer
     return render(request, "results/batch.html", {
         "view": view, "reference": reference, "release_groups": release_groups, "actions": ResultAction,
         "categories": _categories(db),
+    })
+
+
+@router.get("/results/batches/{code}/trace", name="results_trace")
+def results_trace(request: Request, code: str, sample: str, analysis_id: int, analyte: str, user: RequireStaff,
+                  db: DB, reference: Reference, version: int | None = None):
+    """One result's story: its versions, who did what, and the engine's trace step by step (D-16)."""
+    sample_ref, analyte_ref = _result_key(sample, analysis_id, analyte)
+    result = load_result(db, sample_ref, analyte_ref)
+    if result is None or (version is not None and not 1 <= version <= len(result.versions)):
+        return render(request, "error.html", {"status": 404, "message": f"No result {sample} {analyte}."}, 404)
+    shown = result.versions[(version or len(result.versions)) - 1]
+    return render(request, "results/trace.html", {
+        "code": code, "result": result, "shown": shown, "analysis": reference.analysis(analysis_id),
+        "events": result.events_for(shown.version),
     })
 
 
