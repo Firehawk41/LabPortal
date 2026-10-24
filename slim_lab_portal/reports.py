@@ -49,6 +49,8 @@ def _notes(view: ReportView, reference: ReferenceData) -> str:
     for line in view.lines:
         texts = [*line.notes, *(_FLAG_TEXT.get(f, f) for f in line.shown_flags)]
         if line.half_delta is not None:
+            if not line.shown_flags:  # in spec, but within half delta of a limit
+                texts.append("close to the customer's specification")
             texts.append(f"half delta {line.half_delta}")
         if line.amended:
             texts.append("Amended: corrects a result reported before")

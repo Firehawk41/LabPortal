@@ -58,9 +58,10 @@ def issued(tmp_path_factory):
         files = {name: [reports.stored(session, i.file_sha256) for i in issues_for_tr(session, tr)]
                  for name, tr in trs.items()}
         hashes = {name: [i.file_sha256 for i in issues_for_tr(session, tr)] for name, tr in trs.items()}
-        # below_mdl is released but never issued: render what its report would be
-        below = TRSubmissionRepository(session).get_by_tr_number(trs["below_mdl"])
-        files["below_mdl"] = [reports.engine_renderer(session, below, report_view(session, below.tr_number), reference)]
+        # below_mdl and cups_disagree are released but never issued: render what their reports would be
+        for name in ("below_mdl", "cups_disagree"):
+            tr = TRSubmissionRepository(session).get_by_tr_number(trs[name])
+            files[name] = [reports.engine_renderer(session, tr, report_view(session, tr.tr_number), reference)]
     engine.dispose()
     return files, hashes
 
@@ -90,6 +91,12 @@ def test_anions_print_the_ql_and_below_mdl_in_blue(issued):
     f = row(anions, "F")
     assert "&lt; 0.050" in f and "below-mdl" in f and '<td class="c6 value below-mdl">0.167</td>' in f
     assert "<dt>QL</dt>" in anions and "<dt>MDL</dt>" not in anions  # the ion panels print the QL
+
+
+def test_half_delta_is_printed_beside_the_spec_it_bears_on(issued):
+    files, _ = issued
+    report = files["cups_disagree"][0]  # Fe 0.295 against B's 0.3 IPA spec (slim-data D-80)
+    assert "Fe: close to the customer&#x27;s specification; half delta 0.010" in report and "<dt>Half delta</dt>" in report
 
 
 def test_the_assay_report_and_its_amendment(issued):

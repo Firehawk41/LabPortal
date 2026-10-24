@@ -1,5 +1,6 @@
 """slim-data's named demo scenarios on real portal TRs (slim-data D-75)."""
 
+from decimal import Decimal
 import pytest
 
 from hashlib import sha256
@@ -26,7 +27,7 @@ from slim_lab_portal.results import publish_demo_rules
 from tests.conftest import make_settings, postgres_only
 
 ELEMENTS = {26: "Fe", 29: "Cu", 30: "Zn", 28: "Ni", 24: "Cr", 25: "Mn", 9: "F", 17: "Cl"}
-SPECS = {(2, 2, ""): {"Zn": 0.2}}  # customer B, IPA, as in the OSS demo data
+SPECS = {(2, 2, ""): {"Zn": 0.2, "Fe": 0.3}}  # customer B, IPA, as in the OSS demo data
 TEN, THIRTY_SIX, ANIONS, ASSAY = 1, 3, 6, 17  # the OSS demo data's IDs
 
 
@@ -81,7 +82,9 @@ def test_statuses_follow_d71(db, seeded):
 
 
 def test_results_and_issues_are_the_portals(db, seeded):
-    assert report_view(db, seeded["cups_disagree"]).lines[0].shown_flags == ("ABOVE_SPEC",)
+    lines = {line.analyte.code: line for line in report_view(db, seeded["cups_disagree"]).lines}
+    assert lines["Zn"].shown_flags == ("ABOVE_SPEC",) and lines["Zn"].half_delta is None
+    assert lines["Fe"].half_delta == Decimal("0.010")  # within ½Δ of B's 0.3 IPA spec (slim-data D-80)
     issues = issues_for_tr(db, seeded["amended"])
     assert [i.amends for i in issues] == [None, issues[0].id]
     # Each issue's hash is the stored report file's (slim-data D-79): served back exactly as issued.
